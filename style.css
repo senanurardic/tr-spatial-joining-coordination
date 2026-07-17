@@ -1,0 +1,120 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    background-color: #e5e7eb;
+}
+
+#header {
+    height: 50px;
+    background: #111827;
+    color: white;
+    display: flex;
+    align-items: center;
+    padding-left: 15px;
+    font-weight: bold;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    text-transform: lowercase;
+}
+
+#container {
+    display: flex;
+    height: calc(100vh - 50px);
+}
+
+#map {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background-color: #cff0a3; 
+}
+
+/* ===== ENGINE RENDERING BENCHMARKS ===== */
+.marker-cluster {
+    display: flex;
+    flex-direction: row; 
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+
+.agent-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+}
+
+/* ===== GREY RE-CALIBRATED TARGET DOTS (+20% SIZE) ===== */
+.experimental-grey-letter-dot {
+    width: 40px;  
+    height: 40px; 
+    background-color: #91a3ce; 
+    border: 2px solid #ffffff;  
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transform: translate3d(0, 0, 0);
+    
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffffff; 
+}
+
+/* ===== BLUE MAIN CHARACTER DESIGN LAYER ===== */
+.google-maps-dot-container {
+    position: relative;
+    width: 66px;   
+    height: 36px;  
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.google-maps-core {
+    width: 23px;  
+    height: 23px; 
+    background-color: #1a73e8; 
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    position: absolute;
+    z-index: 2;
+}
+
+.google-maps-pulse {
+    width: 58px;   
+    height: 58px;  
+    background-color: rgba(26, 115, 232, 0.25);
+    border-radius: 50%;
+    position: absolute;
+    z-index: 1;
+    transform: scale(0.35);
+    animation: googleMapsBreath 2.2s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+
+@keyframes googleMapsBreath {
+    0% {
+        transform: scale(0.35);
+        opacity: 0.1;
+    }
+    50% {
+        transform: scale(1.0);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(0.35);
+        opacity: 0.1;
+    }
+}
