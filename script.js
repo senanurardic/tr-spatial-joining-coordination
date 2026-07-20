@@ -154,7 +154,18 @@ function animateNodes(timestamp) {
 
     if (markerInstances["leftNode"]) markerInstances["leftNode"].setLngLat([currentG_Lng, currentG_Lat]);
     if (markerInstances["rightNode"]) markerInstances["rightNode"].setLngLat([currentM_Lng, currentM_Lat]);
-    if (elapsed < (PRE_SEQUENCE_DURATION + DELAY_DURATION + MOVE_DURATION)) requestAnimationFrame(animateNodes);
+    
+    // GÜNCELLEME: Tüm animasyon süresi tamamlandığında Qualtrics'i ilerlet
+    if (elapsed < (PRE_SEQUENCE_DURATION + DELAY_DURATION + MOVE_DURATION)) {
+        requestAnimationFrame(animateNodes);
+    } else {
+        // Manipülasyon (Buluşma hareketleri) bittiği an çalışan güvenli yönlendirme bloğu
+        setTimeout(() => {
+            if (window.parent) {
+                window.parent.postMessage("mapAnimationFinished", "*");
+            }
+        }, 1000); // Son kareyi 1 saniye ekranda tutup ardından Qualtrics'i tetikler
+    }
 }
 
 map.on('load', () => {
