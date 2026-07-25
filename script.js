@@ -1,22 +1,10 @@
 let animationStarted = false;
 let userNickname = "";
+let map = null;
+const markerInstances = {};
 
 // ============================
-// CALIBRATED MAP CONFIGURATION (ANKARA)
-// ============================
-const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [32.8540, 39.9195], 
-    zoom: 13.6,                
-    minZoom: 13.6,             
-    maxZoom: 13.6,             
-    dragPan: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoomRotate: false,    
-    pixelRatio: window.devicePixelRatio || 2 
-});
-
-// ============================
-// ANKARA KML GEOMETRY VERTICES
+// GEOMETRİ VE KATILIMCI VERİLERİ (ANKARA)
 // ============================
 const positions = {
     leftNode:  [32.845501, 39.921050], 
@@ -61,9 +49,8 @@ function createMarkerElement(person) {
     return clusterEl;
 }
 
-const markerInstances = {};
-
 function initMarkers() {
+    if (!map) return;
     people.forEach(person => {
         const marker = new maplibregl.Marker({ element: createMarkerElement(person), anchor: "center" })
         .setLngLat(positions[person.id])
@@ -73,11 +60,11 @@ function initMarkers() {
 }
 
 // ============================
-// TIMED LINEAR INTERPOLATION ENGINE
+// ZAMANLI LİNEER İNTERPOLASYON MOTORU
 // ============================
 const PRE_SEQUENCE_DURATION = 30 * 1000; 
 const DELAY_DURATION = 5 * 1000;         
-const MOVE_DURATION = 15 * 1000; // 15 saniyeye düşürüldü       
+const MOVE_DURATION = 15 * 1000;       
 let startTime = null;
 
 const startG = positions.leftNode;
@@ -92,9 +79,9 @@ const deltaLat = startM[1] - startG[1];
 
 const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offsetPercent)];
 const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
+const northMoveStep = 0.0035; 
 const stepLng = 0.0025; const stepLat = 0.0018;
 
-// Vectors
 const gToMLng = startM[0] - startG[0]; const gToMLat = startM[1] - startG[1];
 const gDistToM = Math.sqrt(gToMLng * gToMLng + gToMLat * gToMLat);
 const gStepToMLng = (gToMLng / gDistToM) * stepLng * 1.5; const gStepToMLat = (gToMLat / gDistToM) * stepLat * 1.5;
@@ -119,7 +106,6 @@ function animateNodes(timestamp) {
     let currentM_Lng = startM[0]; let currentM_Lat = startM[1];
 
     if (elapsed < PRE_SEQUENCE_DURATION) {
-        // Choreography Logic (maintained)
         if (elapsed < 3000) { currentG_Lng = startG[0]; currentG_Lat = startG[1]; } 
         else if (elapsed < 7000) { const p = (elapsed - 3000) / 4000; currentG_Lng = startG[0] + (gStepToMainLng * p); currentG_Lat = startG[1] + (gStepToMainLat * p); } 
         else if (elapsed < 8000) { currentG_Lng = startG[0] + gStepToMainLng; currentG_Lat = startG[1] + gStepToMainLat; }
@@ -140,39 +126,47 @@ function animateNodes(timestamp) {
         else if (elapsed < 25000) { const p = (elapsed - 21000) / 4000; currentM_Lng = startM[0] + (mStepToMainLng * p); currentM_Lat = startM[1] + (mStepToMainLat * p); }
         else if (elapsed < 26000) { currentM_Lng = startM[0] + mStepToMainLng; currentM_Lat = startM[1] + mStepToMainLat; }
         else { const p = (elapsed - 26000) / 4000; currentM_Lng = (startM[0] + mStepToMainLng) - (mStepToMainLng * p); currentM_Lat = (startM[1] + mStepToMainLat) - (mStepToMainLat * p); }
-
     } else {
         const mainElapsed = elapsed - PRE_SEQUENCE_DURATION;
-        let progress = 0;
-        if (mainElapsed < DELAY_DURATION) progress = 0;
-        else { const moveElapsed = mainElapsed - DELAY_DURATION; progress = Math.min(moveElapsed / MOVE_DURATION, 1); }
-        currentG_Lng = startG[0] + (targetG[0] - startG[0]) * progress;
-        currentG_Lat = startG[1] + (targetG[1] - startG[1]) * progress;
-        currentM_Lng = startM[0] + (targetM[0] - startM[0]) * progress;
-        currentM_Lat = startM[1] + (targetM[1] - startM[1]) * progress;
+        if (mainElapsed < DELAY_DURATION) {
+            currentG_Lng = startG[0]; currentG_Lat = startG[1];
+            currentM_Lng = startM[0]; currentM_Lat = startM[1];
+        } else {
+            const moveElapsed = mainElapsed - DELAY_DURATION; 
+            if (moveElapsed <= 10000) {
+                const progress = moveElapsed / 10000;
+                currentG_Lng = startG[0] + (targetG[0] - startG[0]) * progress;
+                currentG_Lat = startG[1] + (targetG[1] - startG[1]) * progress;
+                currentM_Lng = startM[0] + (targetM[0] - startM[0]) * progress;
+                currentM_Lat = startM[1] + (targetM[1] - startM[1]) * progress;
+            } else {
+                const northElapsed = moveElapsed - 10000; 
+                const progressNorth = Math.min(northElapsed / 5000, 1);
+                currentG_Lng = targetG[0];
+                currentG_Lat = targetG[1] + (northMoveStep * progressNorth);
+                currentM_Lng = targetM[0];
+                currentM_Lat = targetM[1] + (northMoveStep * progressNorth);
+            }
+        }
     }
 
     if (markerInstances["leftNode"]) markerInstances["leftNode"].setLngLat([currentG_Lng, currentG_Lat]);
     if (markerInstances["rightNode"]) markerInstances["rightNode"].setLngLat([currentM_Lng, currentM_Lat]);
-    
-    // GÜNCELLEME: Tüm animasyon süresi tamamlandığında Qualtrics'i ilerlet
+
     if (elapsed < (PRE_SEQUENCE_DURATION + DELAY_DURATION + MOVE_DURATION)) {
         requestAnimationFrame(animateNodes);
     } else {
-        // Manipülasyon (Buluşma hareketleri) bittiği an çalışan güvenli yönlendirme bloğu
         setTimeout(() => {
             if (window.parent) {
                 window.parent.postMessage("mapAnimationFinished", "*");
             }
-        }, 1000); // Son kareyi 1 saniye ekranda tutup ardından Qualtrics'i tetikler
+        }, 1000); 
     }
 }
 
-map.on('load', () => {
-    map.getCanvas().style.filter = 'grayscale(0.6) contrast(1.1) brightness(0.95) hue-rotate(25deg)';
-    startExperimentFlow();
-});
-
+// ============================
+// DENEY AKIŞ MOTORU (SIRALAMADAN BAĞIMSIZ)
+// ============================
 const flowScreen = document.getElementById("experiment-flow-screen");
 const stepConnecting = document.getElementById("step-connecting");
 const stepWaiting = document.getElementById("step-waiting");
@@ -183,32 +177,67 @@ const submitBtn = document.getElementById("submit-btn");
 
 function startExperimentFlow() {
     setTimeout(() => {
-        stepConnecting.classList.add("hidden");
-        stepWaiting.classList.remove("hidden");
+        if (stepConnecting) stepConnecting.classList.add("hidden");
+        if (stepWaiting) stepWaiting.classList.remove("hidden");
         setTimeout(() => {
-            stepWaiting.classList.add("hidden");
-            stepJoined.classList.remove("hidden");
+            if (stepWaiting) stepWaiting.classList.add("hidden");
+            if (stepJoined) stepJoined.classList.remove("hidden");
             setTimeout(() => {
-                stepJoined.classList.add("hidden");
-                stepNickname.classList.remove("hidden");
-                nicknameInput.focus();
+                if (stepJoined) stepJoined.classList.add("hidden");
+                if (stepNickname) stepNickname.classList.remove("hidden");
+                if (nicknameInput) nicknameInput.focus();
             }, 3000);
         }, 5000);
     }, 3000);
 }
 
 function handleLoginSubmit() {
-    const val = nicknameInput.value.trim();
+    const val = nicknameInput ? nicknameInput.value.trim() : "User";
     if (val === "") { alert("Please enter a valid nickname."); return; }
     userNickname = val;
-    flowScreen.style.opacity = "0";
-    flowScreen.style.transform = "scale(0.95)";
+    if (flowScreen) {
+        flowScreen.style.opacity = "0";
+        flowScreen.style.transform = "scale(0.95)";
+    }
     setTimeout(() => {
-        flowScreen.style.display = "none";
+        if (flowScreen) flowScreen.style.display = "none";
         initMarkers();
         animationStarted = true;
         requestAnimationFrame(animateNodes);
     }, 500);
 }
-submitBtn.addEventListener("click", handleLoginSubmit);
-nicknameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleLoginSubmit(); });
+
+if (submitBtn) submitBtn.addEventListener("click", handleLoginSubmit);
+if (nicknameInput) {
+    nicknameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleLoginSubmit(); });
+}
+
+// ============================
+// GÜVENLİ BAŞLATMA ALANI
+// ============================
+// 1. Akışı hemen başlat (Harita engellense dahi sayıcı çalışır)
+startExperimentFlow();
+
+// 2. Haritayı zırhlı alanda (Try-Catch) yüklemeyi dene
+try {
+    if (typeof maplibregl !== 'undefined') {
+        map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tiles.openfreemap.org/styles/liberty',
+            center: [32.8540, 39.9195], 
+            zoom: 13.6,                
+            minZoom: 13.6,             
+            maxZoom: 13.6,             
+            dragPan: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoomRotate: false,    
+            pixelRatio: window.devicePixelRatio || 2 
+        });
+
+        map.on('load', () => {
+            map.getCanvas().style.filter = 'grayscale(0.6) contrast(1.1) brightness(0.95) hue-rotate(25deg)';
+        });
+    } else {
+        console.warn("MapLibre CDN kütüphanesi yüklenemedi, ancak akış ekranı çalışmaya devam ediyor.");
+    }
+} catch (error) {
+    console.error("Harita başlatılamadı (Güvenlik Kalkanı veya Ağ Hatası):", error);
+}
