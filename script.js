@@ -60,18 +60,21 @@ function initMarkers() {
 }
 
 // ============================
-// TIMED LINEAR INTERPOLATION ENGINE
+// TIMED LINEAR INTERPOLATION ENGINE (CONDITION 2 - SYNCHRONIZED OUT-AND-BACK)
 // ============================
-const PRE_SEQUENCE_DURATION = 12 * 1000; // STANDARDIZED: 12 seconds neutral baseline phase
-const DELAY_DURATION = 5 * 1000;         // 5 seconds delay before condition-specific movement
-const MOVE_DURATION = 15 * 1000;         // 15 seconds condition-specific movement phase (10s meet + 5s move away)
+const PRE_SEQUENCE_DURATION     = 12 * 1000; // 0 - 12s: Standardized neutral baseline phase
+const PAUSE_DURATION            = 4 * 1000;  // 12 - 16s: Pause phase
+const APPROACH_DURATION         = 12 * 1000; // 16 - 28s: Movement towards each other (joining)
+const COORDINATED_MOVE_DURATION = 12 * 1000; // 28 - 40s: Out-and-back joint movement phase
+const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION + COORDINATED_MOVE_DURATION; // 40s Total
+
 let startTime = null;
 
 const startG = positions.leftNode;
 const startM = positions.rightNode;
 const startMain = positions.mainNode;
 
-// Condition 2 Specific Target Calculations: Meeting behavior followed by northward departure
+// Target calculation for meeting point
 const midLng = (startG[0] + startM[0]) / 2;
 const midLat = (startG[1] + startM[1]) / 2; 
 const offsetPercent = 0.04; 
@@ -80,32 +83,38 @@ const deltaLat = startM[1] - startG[1];
 
 const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offsetPercent)];
 const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
-const northMoveStep = 0.0035; // Northward departure step for Condition 2 (Ostracism/Exclusion)
 
-// ============================
-// STANDARDIZED NEUTRAL BASELINE CONFIGURATION (0-12s)
-// ============================
-// This identical baseline configuration ensures strict experimental standardization across all conditions.
-const BASELINE_DRIFT_RADIUS = 0.0005; // Small spatial boundary ensuring distance stability (approx. 40-50 meters)
+// Direction vector for joint out-and-back movement (moving together towards east/north-east and returning)
+const jointOffsetLng = 0.0020;
+const jointOffsetLat = 0.0015;
+
+const BASELINE_DRIFT_RADIUS = 0.0005;
 
 function animateNodes(timestamp) {
     if (!animationStarted) return;
     if (!startTime) startTime = timestamp;
     const elapsed = timestamp - startTime;
-    let currentG_Lng = startG[0]; let currentG_Lat = startG[1];
-    let currentM_Lng = startM[0]; let currentM_Lat = startM[1];
+
+    let currentG_Lng = startG[0]; 
+    let currentG_Lat = startG[1];
+    let currentM_Lng = startM[0]; 
+    let currentM_Lat = startM[1];
+
+    // Static drift endpoint coordinates at t = 12s (used as anchor for smooth transitions)
+    const driftG_X_end = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
+    const driftG_Y_end = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
+    const driftM_X_end = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
+    const driftM_Y_end = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
+
+    const pausedG = [startG[0] + driftG_X_end, startG[1] + driftG_Y_end];
+    const pausedM = [startM[0] + driftM_X_end, startM[1] + driftM_Y_end];
 
     if (elapsed < PRE_SEQUENCE_DURATION) {
         // =========================================================================
-        // STANDARDIZED NEUTRAL BASELINE PHASE (0 - 12 Seconds)
-        // =========================================================================
-        // - Asynchronous localized random drift around initial anchor coordinates.
-        // - Identical across Condition 1, Condition 2, and Condition 3.
-        // - Communicates ONLY live system activity without relational cues.
+        // PHASE 1: STANDARDIZED NEUTRAL BASELINE PHASE (0s - 12s)
         // =========================================================================
         const driftG_X = Math.sin(elapsed / 1800) * BASELINE_DRIFT_RADIUS;
         const driftG_Y = Math.cos(elapsed / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
-        
         const driftM_X = Math.cos(elapsed / 2200) * BASELINE_DRIFT_RADIUS;
         const driftM_Y = Math.sin(elapsed / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
 
@@ -114,48 +123,49 @@ function animateNodes(timestamp) {
         currentM_Lng = startM[0] + driftM_X;
         currentM_Lat = startM[1] + driftM_Y;
 
+    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION)) {
+        // =========================================================================
+        // PHASE 2: PAUSE PHASE (12s - 16s)
+        // =========================================================================
+        currentG_Lng = pausedG[0];
+        currentG_Lat = pausedG[1];
+        currentM_Lng = pausedM[0];
+        currentM_Lat = pausedM[1];
+
+    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION)) {
+        // =========================================================================
+        // PHASE 3: APPROACH / JOINING PHASE (16s - 28s)
+        // =========================================================================
+        const approachElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION);
+        const progress = approachElapsed / APPROACH_DURATION;
+
+        currentG_Lng = pausedG[0] + (targetG[0] - pausedG[0]) * progress;
+        currentG_Lat = pausedG[1] + (targetG[1] - pausedG[1]) * progress;
+        currentM_Lng = pausedM[0] + (targetM[0] - pausedM[0]) * progress;
+        currentM_Lat = pausedM[1] + (targetM[1] - pausedM[1]) * progress;
+
     } else {
         // =========================================================================
-        // CONDITION 2 SPECIFIC MANIPULATION PHASE (12s+ onwards)
+        // PHASE 4: SYNCHRONIZED OUT-AND-BACK MOVEMENT (28s - 40s)
         // =========================================================================
-        const mainElapsed = elapsed - PRE_SEQUENCE_DURATION;
-        if (mainElapsed < DELAY_DURATION) {
-            // Retain the final position of the baseline drift during the 5-second waiting delay
-            // to prevent visual snapping/teleportation before the main manipulation starts.
-            const driftG_X = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
-            const driftG_Y = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
-            const driftM_X = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
-            const driftM_Y = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
+        // Both agents move together in the exact same direction and return to the meeting point, 
+        // using a triangle wave function to guarantee identical speed, displacement, and duration.
+        const coordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION);
+        const progressCoord = coordElapsed / COORDINATED_MOVE_DURATION;
+        
+        // Triangle wave: goes from 0 to 1 (at halfway, t=6s) and back to 0 (at t=12s)
+        const triangleWave = progressCoord <= 0.5 ? (progressCoord * 2) : (2 - progressCoord * 2);
 
-            currentG_Lng = startG[0] + driftG_X; 
-            currentG_Lat = startG[1] + driftG_Y;
-            currentM_Lng = startM[0] + driftM_X; 
-            currentM_Lat = startM[1] + driftM_Y;
-        } else {
-            const moveElapsed = mainElapsed - DELAY_DURATION; 
-            if (moveElapsed <= 10000) {
-                // First 10 seconds of movement: Node G and Node M move toward each other to meet
-                const progress = moveElapsed / 10000;
-                currentG_Lng = startG[0] + (targetG[0] - startG[0]) * progress;
-                currentG_Lat = startG[1] + (targetG[1] - startG[1]) * progress;
-                currentM_Lng = startM[0] + (targetM[0] - startM[0]) * progress;
-                currentM_Lat = startM[1] + (targetM[1] - startM[1]) * progress;
-            } else {
-                // Final 5 seconds of movement: Node G and Node M move northward together, away from the participant
-                const northElapsed = moveElapsed - 10000; 
-                const progressNorth = Math.min(northElapsed / 5000, 1);
-                currentG_Lng = targetG[0];
-                currentG_Lat = targetG[1] + (northMoveStep * progressNorth);
-                currentM_Lng = targetM[0];
-                currentM_Lat = targetM[1] + (northMoveStep * progressNorth);
-            }
-        }
+        currentG_Lng = targetG[0] + (jointOffsetLng * triangleWave);
+        currentG_Lat = targetG[1] + (jointOffsetLat * triangleWave);
+        currentM_Lng = targetM[0] + (jointOffsetLng * triangleWave);
+        currentM_Lat = targetM[1] + (jointOffsetLat * triangleWave);
     }
 
     if (markerInstances["leftNode"]) markerInstances["leftNode"].setLngLat([currentG_Lng, currentG_Lat]);
     if (markerInstances["rightNode"]) markerInstances["rightNode"].setLngLat([currentM_Lng, currentM_Lat]);
 
-    if (elapsed < (PRE_SEQUENCE_DURATION + DELAY_DURATION + MOVE_DURATION)) {
+    if (elapsed < TOTAL_ANIMATION_DURATION) {
         requestAnimationFrame(animateNodes);
     } else {
         setTimeout(() => {
@@ -167,7 +177,7 @@ function animateNodes(timestamp) {
 }
 
 // ============================
-// EXPERIMENT FLOW ENGINE (ORDER INDEPENDENT)
+// EXPERIMENT FLOW ENGINE
 // ============================
 const flowScreen = document.getElementById("experiment-flow-screen");
 const stepConnecting = document.getElementById("step-connecting");
@@ -217,10 +227,8 @@ if (nicknameInput) {
 // ============================
 // FAIL-SAFE INITIALIZATION BLOCK
 // ============================
-// 1. Immediately initiate the UI flow sequence independently of map rendering
 startExperimentFlow();
 
-// 2. Attempt map loading inside a protected try-catch block to prevent fatal script errors
 try {
     if (typeof maplibregl !== 'undefined') {
         map = new maplibregl.Map({
@@ -241,5 +249,5 @@ try {
         console.warn("MapLibre CDN library failed to load, but the experimental interface continues running.");
     }
 } catch (error) {
-    console.error("Map initialization failed (Security Shield or Network Error):", error);
+    console.error("Map initialization failed:", error);
 }
