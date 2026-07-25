@@ -4,7 +4,7 @@ let map = null;
 const markerInstances = {};
 
 // ============================
-// GEOMETRİ VE KATILIMCI VERİLERİ (ANKARA)
+// ANKARA KML GEOMETRY VERTICES
 // ============================
 const positions = {
     leftNode:  [32.845501, 39.921050], 
@@ -60,17 +60,18 @@ function initMarkers() {
 }
 
 // ============================
-// ZAMANLI LİNEER İNTERPOLASYON MOTORU
+// TIMED LINEAR INTERPOLATION ENGINE
 // ============================
-const PRE_SEQUENCE_DURATION = 30 * 1000; 
-const DELAY_DURATION = 5 * 1000;         
-const MOVE_DURATION = 15 * 1000;       
+const PRE_SEQUENCE_DURATION = 12 * 1000; // STANDARDIZED: 12 seconds neutral baseline phase
+const DELAY_DURATION = 5 * 1000;         // 5 seconds delay before condition-specific movement
+const MOVE_DURATION = 15 * 1000;         // 15 seconds condition-specific movement phase (10s meet + 5s move away)
 let startTime = null;
 
 const startG = positions.leftNode;
 const startM = positions.rightNode;
 const startMain = positions.mainNode;
 
+// Condition 2 Specific Target Calculations: Meeting behavior followed by northward departure
 const midLng = (startG[0] + startM[0]) / 2;
 const midLat = (startG[1] + startM[1]) / 2; 
 const offsetPercent = 0.04; 
@@ -79,24 +80,13 @@ const deltaLat = startM[1] - startG[1];
 
 const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offsetPercent)];
 const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
-const northMoveStep = 0.0035; 
-const stepLng = 0.0025; const stepLat = 0.0018;
+const northMoveStep = 0.0035; // Northward departure step for Condition 2 (Ostracism/Exclusion)
 
-const gToMLng = startM[0] - startG[0]; const gToMLat = startM[1] - startG[1];
-const gDistToM = Math.sqrt(gToMLng * gToMLng + gToMLat * gToMLat);
-const gStepToMLng = (gToMLng / gDistToM) * stepLng * 1.5; const gStepToMLat = (gToMLat / gDistToM) * stepLat * 1.5;
-
-const gToMainLng = startMain[0] - startG[0]; const gToMainLat = startMain[1] - startG[1];
-const gDistToMain = Math.sqrt(gToMainLng * gToMainLng + gToMainLat * gToMainLat);
-const gStepToMainLng = (gToMainLng / gDistToMain) * stepLng * 1.5; const gStepToMainLat = (gToMainLat / gDistToMain) * stepLat * 1.5;
-
-const mToGLng = startG[0] - startM[0]; const mToGLat = startG[1] - startM[1];
-const mDistToG = Math.sqrt(mToGLng * mToGLng + mToGLat * mToGLat);
-const mStepToGLng = (mToGLng / mDistToG) * stepLng * 1.5; const mStepToGLat = (mToGLat / mDistToG) * stepLat * 1.5;
-
-const mToMainLng = startMain[0] - startM[0]; const mToMainLat = startMain[1] - startM[1];
-const mDistToMain = Math.sqrt(mToMainLng * mToMainLng + mToMainLat * mToMainLat);
-const mStepToMainLng = (mToMainLng / mDistToMain) * stepLng * 1.5; const mStepToMainLat = (mToMainLat / mDistToMain) * stepLat * 1.5;
+// ============================
+// STANDARDIZED NEUTRAL BASELINE CONFIGURATION (0-12s)
+// ============================
+// This identical baseline configuration ensures strict experimental standardization across all conditions.
+const BASELINE_DRIFT_RADIUS = 0.0005; // Small spatial boundary ensuring distance stability (approx. 40-50 meters)
 
 function animateNodes(timestamp) {
     if (!animationStarted) return;
@@ -106,40 +96,52 @@ function animateNodes(timestamp) {
     let currentM_Lng = startM[0]; let currentM_Lat = startM[1];
 
     if (elapsed < PRE_SEQUENCE_DURATION) {
-        if (elapsed < 3000) { currentG_Lng = startG[0]; currentG_Lat = startG[1]; } 
-        else if (elapsed < 7000) { const p = (elapsed - 3000) / 4000; currentG_Lng = startG[0] + (gStepToMainLng * p); currentG_Lat = startG[1] + (gStepToMainLat * p); } 
-        else if (elapsed < 8000) { currentG_Lng = startG[0] + gStepToMainLng; currentG_Lat = startG[1] + gStepToMainLat; }
-        else if (elapsed < 12000) { const p = (elapsed - 8000) / 4000; currentG_Lng = (startG[0] + gStepToMainLng) - (gStepToMainLng * p); currentG_Lat = (startG[1] + gStepToMainLat) - (gStepToMainLat * p); }
-        else if (elapsed < 14000) { currentG_Lng = startG[0]; currentG_Lat = startG[1]; }
-        else if (elapsed < 18000) { const p = (elapsed - 14000) / 4000; currentG_Lng = startG[0] + (gStepToMLng * p); currentG_Lat = startG[1] + (gStepToMLat * p); }
-        else if (elapsed < 22000) { const p = (elapsed - 18000) / 4000; currentG_Lng = (startG[0] + gStepToMLng) - (gStepToMLng * p); currentG_Lat = (startG[1] + gStepToMLat) - (gStepToMLat * p); }
-        else if (elapsed < 26000) { const p = (elapsed - 22000) / 4000; currentG_Lng = startG[0] - (stepLng * p); currentG_Lat = startG[1]; }
-        else { const p = (elapsed - 26000) / 4000; currentG_Lng = (startG[0] - stepLng) + (stepLng * p); currentG_Lat = startG[1]; }
+        // =========================================================================
+        // STANDARDIZED NEUTRAL BASELINE PHASE (0 - 12 Seconds)
+        // =========================================================================
+        // - Asynchronous localized random drift around initial anchor coordinates.
+        // - Identical across Condition 1, Condition 2, and Condition 3.
+        // - Communicates ONLY live system activity without relational cues.
+        // =========================================================================
+        const driftG_X = Math.sin(elapsed / 1800) * BASELINE_DRIFT_RADIUS;
+        const driftG_Y = Math.cos(elapsed / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
+        
+        const driftM_X = Math.cos(elapsed / 2200) * BASELINE_DRIFT_RADIUS;
+        const driftM_Y = Math.sin(elapsed / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
 
-        if (elapsed < 3000) { currentM_Lng = startM[0]; currentM_Lat = startM[1]; }
-        else if (elapsed < 6000) { const p = (elapsed - 3000) / 3000; currentM_Lng = startM[0]; currentM_Lat = startM[1] + (stepLat * p); }
-        else if (elapsed < 8000) { currentM_Lng = startM[0]; currentM_Lat = startM[1] + stepLat; }
-        else if (elapsed < 11000) { const p = (elapsed - 8000) / 3000; currentM_Lng = startM[0]; currentM_Lat = (startM[1] + stepLat) - (stepLat * p); }
-        else if (elapsed < 13000) { currentM_Lng = startM[0]; currentM_Lat = startM[1]; }
-        else if (elapsed < 17000) { const p = (elapsed - 13000) / 4000; currentM_Lng = startM[0] + (mStepToGLng * p); currentM_Lat = startM[1] + (mStepToGLat * p); }
-        else if (elapsed < 21000) { const p = (elapsed - 17000) / 4000; currentM_Lng = (startM[0] + mStepToGLng) - (mStepToGLng * p); currentM_Lat = (startM[1] + mStepToGLat) - (mStepToGLat * p); }
-        else if (elapsed < 25000) { const p = (elapsed - 21000) / 4000; currentM_Lng = startM[0] + (mStepToMainLng * p); currentM_Lat = startM[1] + (mStepToMainLat * p); }
-        else if (elapsed < 26000) { currentM_Lng = startM[0] + mStepToMainLng; currentM_Lat = startM[1] + mStepToMainLat; }
-        else { const p = (elapsed - 26000) / 4000; currentM_Lng = (startM[0] + mStepToMainLng) - (mStepToMainLng * p); currentM_Lat = (startM[1] + mStepToMainLat) - (mStepToMainLat * p); }
+        currentG_Lng = startG[0] + driftG_X;
+        currentG_Lat = startG[1] + driftG_Y;
+        currentM_Lng = startM[0] + driftM_X;
+        currentM_Lat = startM[1] + driftM_Y;
+
     } else {
+        // =========================================================================
+        // CONDITION 2 SPECIFIC MANIPULATION PHASE (12s+ onwards)
+        // =========================================================================
         const mainElapsed = elapsed - PRE_SEQUENCE_DURATION;
         if (mainElapsed < DELAY_DURATION) {
-            currentG_Lng = startG[0]; currentG_Lat = startG[1];
-            currentM_Lng = startM[0]; currentM_Lat = startM[1];
+            // Retain the final position of the baseline drift during the 5-second waiting delay
+            // to prevent visual snapping/teleportation before the main manipulation starts.
+            const driftG_X = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
+            const driftG_Y = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
+            const driftM_X = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
+            const driftM_Y = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
+
+            currentG_Lng = startG[0] + driftG_X; 
+            currentG_Lat = startG[1] + driftG_Y;
+            currentM_Lng = startM[0] + driftM_X; 
+            currentM_Lat = startM[1] + driftM_Y;
         } else {
             const moveElapsed = mainElapsed - DELAY_DURATION; 
             if (moveElapsed <= 10000) {
+                // First 10 seconds of movement: Node G and Node M move toward each other to meet
                 const progress = moveElapsed / 10000;
                 currentG_Lng = startG[0] + (targetG[0] - startG[0]) * progress;
                 currentG_Lat = startG[1] + (targetG[1] - startG[1]) * progress;
                 currentM_Lng = startM[0] + (targetM[0] - startM[0]) * progress;
                 currentM_Lat = startM[1] + (targetM[1] - startM[1]) * progress;
             } else {
+                // Final 5 seconds of movement: Node G and Node M move northward together, away from the participant
                 const northElapsed = moveElapsed - 10000; 
                 const progressNorth = Math.min(northElapsed / 5000, 1);
                 currentG_Lng = targetG[0];
@@ -165,7 +167,7 @@ function animateNodes(timestamp) {
 }
 
 // ============================
-// DENEY AKIŞ MOTORU (SIRALAMADAN BAĞIMSIZ)
+// EXPERIMENT FLOW ENGINE (ORDER INDEPENDENT)
 // ============================
 const flowScreen = document.getElementById("experiment-flow-screen");
 const stepConnecting = document.getElementById("step-connecting");
@@ -213,12 +215,12 @@ if (nicknameInput) {
 }
 
 // ============================
-// GÜVENLİ BAŞLATMA ALANI
+// FAIL-SAFE INITIALIZATION BLOCK
 // ============================
-// 1. Akışı hemen başlat (Harita engellense dahi sayıcı çalışır)
+// 1. Immediately initiate the UI flow sequence independently of map rendering
 startExperimentFlow();
 
-// 2. Haritayı zırhlı alanda (Try-Catch) yüklemeyi dene
+// 2. Attempt map loading inside a protected try-catch block to prevent fatal script errors
 try {
     if (typeof maplibregl !== 'undefined') {
         map = new maplibregl.Map({
@@ -236,8 +238,8 @@ try {
             map.getCanvas().style.filter = 'grayscale(0.6) contrast(1.1) brightness(0.95) hue-rotate(25deg)';
         });
     } else {
-        console.warn("MapLibre CDN kütüphanesi yüklenemedi, ancak akış ekranı çalışmaya devam ediyor.");
+        console.warn("MapLibre CDN library failed to load, but the experimental interface continues running.");
     }
 } catch (error) {
-    console.error("Harita başlatılamadı (Güvenlik Kalkanı veya Ağ Hatası):", error);
+    console.error("Map initialization failed (Security Shield or Network Error):", error);
 }
