@@ -60,13 +60,13 @@ function initMarkers() {
 }
 
 // ============================
-// TIMED LINEAR INTERPOLATION ENGINE (CONDITION 2 - SYNCHRONIZED OUT-AND-BACK)
+// TIMED LINEAR INTERPOLATION ENGINE (CONDITION 3 - INDEPENDENT ORBITING & NON-COORDINATED CONTROL)
 // ============================
 const PRE_SEQUENCE_DURATION     = 12 * 1000; // 0 - 12s: Standardized neutral baseline phase
 const PAUSE_DURATION            = 4 * 1000;  // 12 - 16s: Pause phase
-const APPROACH_DURATION         = 12 * 1000; // 16 - 28s: Movement towards each other (joining)
-const COORDINATED_MOVE_DURATION = 12 * 1000; // 28 - 40s: Out-and-back joint movement phase
-const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION + COORDINATED_MOVE_DURATION; // 40s Total
+const ORBIT_DURATION            = 11 * 1000; // 16 - 27s: Agents orbit around themselves independently (Total = 27s)
+const NON_COORDINATED_DURATION  = 13 * 1000; // 27 - 40s: Non-coordinated and non-synchronized independent micro-movements (Total = 40s)
+const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + ORBIT_DURATION + NON_COORDINATED_DURATION; // 40s Total
 
 let startTime = null;
 
@@ -74,21 +74,25 @@ const startG = positions.leftNode;
 const startM = positions.rightNode;
 const startMain = positions.mainNode;
 
-// Target calculation for meeting point
-const midLng = (startG[0] + startM[0]) / 2;
-const midLat = (startG[1] + startM[1]) / 2; 
-const offsetPercent = 0.04; 
-const deltaLng = startM[0] - startG[0];
-const deltaLat = startM[1] - startG[1];
-
-const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offsetPercent)];
-const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
-
-// Direction vector for joint out-and-back movement (moving together towards east/north-east and returning)
-const jointOffsetLng = 0.0020;
-const jointOffsetLat = 0.0015;
+// Orbiting parameters for individual self-orbiting around their own initial start positions
+const EARTH_RADIUS_METERS = 6378137;
+const LAT_TO_METERS = (Math.PI * EARTH_RADIUS_METERS) / 180; 
+const radiusMeters = 25.0; // Tight localized self-orbit radius
+const orbitSpeed = 0.004;
 
 const BASELINE_DRIFT_RADIUS = 0.0005;
+const NON_COOR_DRIFT_RADIUS = BASELINE_DRIFT_RADIUS * 0.6;
+
+// Calculate exact coordinates at t = 12s to ensure seamless transitions
+const finalDriftG_X = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
+const finalDriftG_Y = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
+const finalDriftM_X = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
+const finalDriftM_Y = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
+
+const holdG_Lng = startG[0] + finalDriftG_X;
+const holdG_Lat = startG[1] + finalDriftG_Y;
+const holdM_Lng = startM[0] + finalDriftM_X;
+const holdM_Lat = startM[1] + finalDriftM_Y;
 
 function animateNodes(timestamp) {
     if (!animationStarted) return;
@@ -99,15 +103,6 @@ function animateNodes(timestamp) {
     let currentG_Lat = startG[1];
     let currentM_Lng = startM[0]; 
     let currentM_Lat = startM[1];
-
-    // Static drift endpoint coordinates at t = 12s (used as anchor for smooth transitions)
-    const driftG_X_end = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
-    const driftG_Y_end = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
-    const driftM_X_end = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
-    const driftM_Y_end = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
-
-    const pausedG = [startG[0] + driftG_X_end, startG[1] + driftG_Y_end];
-    const pausedM = [startM[0] + driftM_X_end, startM[1] + driftM_Y_end];
 
     if (elapsed < PRE_SEQUENCE_DURATION) {
         // =========================================================================
@@ -127,39 +122,56 @@ function animateNodes(timestamp) {
         // =========================================================================
         // PHASE 2: PAUSE PHASE (12s - 16s)
         // =========================================================================
-        currentG_Lng = pausedG[0];
-        currentG_Lat = pausedG[1];
-        currentM_Lng = pausedM[0];
-        currentM_Lat = pausedM[1];
+        currentG_Lng = holdG_Lng;
+        currentG_Lat = holdG_Lat;
+        currentM_Lng = holdM_Lng;
+        currentM_Lat = holdM_Lat;
 
-    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION)) {
+    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION + ORBIT_DURATION)) {
         // =========================================================================
-        // PHASE 3: APPROACH / JOINING PHASE (16s - 28s)
+        // PHASE 3: INDEPENDENT SELF-ORBITING PHASE (16s - 27s)
         // =========================================================================
-        const approachElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION);
-        const progress = approachElapsed / APPROACH_DURATION;
+        const orbitElapsedSeconds = (elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION)) / 1000;
+        const currentAngle = orbitElapsedSeconds * 60 * orbitSpeed;
 
-        currentG_Lng = pausedG[0] + (targetG[0] - pausedG[0]) * progress;
-        currentG_Lat = pausedG[1] + (targetG[1] - pausedG[1]) * progress;
-        currentM_Lng = pausedM[0] + (targetM[0] - pausedM[0]) * progress;
-        currentM_Lat = pausedM[1] + (targetM[1] - pausedM[1]) * progress;
+        const lngToMetersG = LAT_TO_METERS * Math.cos(holdG_Lat * Math.PI / 180);
+        const deltaLatG = (radiusMeters * Math.sin(currentAngle)) / LAT_TO_METERS;
+        const deltaLngG = (radiusMeters * (Math.cos(currentAngle) - 1)) / lngToMetersG;
+        currentG_Lng = holdG_Lng + deltaLngG;
+        currentG_Lat = holdG_Lat + deltaLatG;
+
+        const lngToMetersM = LAT_TO_METERS * Math.cos(holdM_Lat * Math.PI / 180);
+        const deltaLatM = (radiusMeters * Math.sin(currentAngle)) / LAT_TO_METERS;
+        const deltaLngM = (radiusMeters * (Math.cos(currentAngle) - 1)) / lngToMetersM;
+        currentM_Lng = holdM_Lng + deltaLngM;
+        currentM_Lat = holdM_Lat + deltaLatM;
 
     } else {
         // =========================================================================
-        // PHASE 4: SYNCHRONIZED OUT-AND-BACK MOVEMENT (28s - 40s)
+        // PHASE 4: NON-COORDINATED & NON-SYNCHRONIZED POST-ORBIT MOVEMENTS (27s - 40s)
         // =========================================================================
-        // Both agents move together in the exact same direction and return to the meeting point, 
-        // using a triangle wave function to guarantee identical speed, displacement, and duration.
-        const coordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION);
-        const progressCoord = coordElapsed / COORDINATED_MOVE_DURATION;
+        const nonCoordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + ORBIT_DURATION);
         
-        // Triangle wave: goes from 0 to 1 (at halfway, t=6s) and back to 0 (at t=12s)
-        const triangleWave = progressCoord <= 0.5 ? (progressCoord * 2) : (2 - progressCoord * 2);
+        // Grab the final position where self-orbiting ended to anchor the final phase smoothly
+        const finalOrbitSec = ORBIT_DURATION / 1000;
+        const finalAngle = finalOrbitSec * 60 * orbitSpeed;
+        const lngToMetersG = LAT_TO_METERS * Math.cos(holdG_Lat * Math.PI / 180);
+        const finalOrbitG_Lng = holdG_Lng + ((radiusMeters * (Math.cos(finalAngle) - 1)) / lngToMetersG);
+        const finalOrbitG_Lat = holdG_Lat + ((radiusMeters * Math.sin(finalAngle)) / LAT_TO_METERS);
 
-        currentG_Lng = targetG[0] + (jointOffsetLng * triangleWave);
-        currentG_Lat = targetG[1] + (jointOffsetLat * triangleWave);
-        currentM_Lng = targetM[0] + (jointOffsetLng * triangleWave);
-        currentM_Lat = targetM[1] + (jointOffsetLat * triangleWave);
+        const lngToMetersM = LAT_TO_METERS * Math.cos(holdM_Lat * Math.PI / 180);
+        const finalOrbitM_Lng = holdM_Lng + ((radiusMeters * (Math.cos(finalAngle) - 1)) / lngToMetersM);
+        const finalOrbitM_Lat = holdM_Lat + ((radiusMeters * Math.sin(finalAngle)) / LAT_TO_METERS);
+
+        const driftG_X = Math.sin(nonCoordElapsed / 1300) * NON_COOR_DRIFT_RADIUS;
+        const driftG_Y = Math.cos(nonCoordElapsed / 1900) * NON_COOR_DRIFT_RADIUS;
+        const driftM_X = Math.cos(nonCoordElapsed / 1600) * NON_COOR_DRIFT_RADIUS;
+        const driftM_Y = Math.sin(nonCoordElapsed / 2200) * NON_COOR_DRIFT_RADIUS;
+
+        currentG_Lng = finalOrbitG_Lng + driftG_X;
+        currentG_Lat = finalOrbitG_Lat + driftG_Y;
+        currentM_Lng = finalOrbitM_Lng + driftM_X;
+        currentM_Lat = finalOrbitM_Lat + driftM_Y;
     }
 
     if (markerInstances["leftNode"]) markerInstances["leftNode"].setLngLat([currentG_Lng, currentG_Lat]);
