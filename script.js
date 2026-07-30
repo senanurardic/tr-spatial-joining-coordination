@@ -20,23 +20,25 @@ const people = [
 
 // ============================================================================
 // SHARED CROSS-CONDITION MOVEMENT CONFIG
-// Phase 3 (16–28s) speed already matches Joining and Control (corrected) here:
-// each agent covers a distance equal to (0.5 – offsetPercent) of the actual G-M distance (≈524.06 m)
-// in 12 seconds → ≈43.67 m/s. NO CHANGE IS REQUIRED under these conditions.
+// Phase 3 (16-28s) speed here already matches the Joining condition and the
+// (enlarged-radius) Control condition: each agent travels (0.5 - offsetPercent)
+// of the real G-M distance (≈524.06m) in 12 seconds → ≈43.67 m/s. NO CHANGE
+// NEEDED in this condition.
 //
-// Phase 4 (28–40 s) DECISION (finalized): The current magnitude (jointOffsetLng=0.0020,
-// jointOffsetLat=0.0015) corresponds to a peak displacement of ≈238.8 m and a speed of ≈39.8 m/s
-// velocity. This is significantly faster than the slow independent
-// drift (~cm/s) in Phase 4 of Control/Joining — HOWEVER, this difference has been INTENTIONALLY
-// PRESERVED: it is considered an operational/structural consequence of
-// synchronous manipulation (synchronized/joint movement inherently requires greater
-// joint displacement). THESE VALUES MUST NOT BE CHANGED.
-// It is recommended to document this in the OSF pre-registration: “The higher speed in Phase 4 of the Coordination condition
-// is an operational consequence of the synchrony manipulation; noted as a potential
-// confound, it is planned to be measured separately via manipulation control
-// (perceived synchrony vs. perceived speed/mobility).”
+// PHASE 4 DECISION (finalized): the current amplitude (jointOffsetLng=0.0020,
+// jointOffsetLat=0.0015) corresponds to a peak displacement of ≈238.8m and a
+// speed of ≈39.8 m/s. This is noticeably faster than Control/Joining's Phase 4
+// slow independent drift (~cm/s) — but this difference has been KEPT
+// INTENTIONALLY: it is treated as an operational/structural consequence of the
+// synchrony manipulation itself (moving together in sync inherently requires a
+// larger shared displacement). THESE VALUES SHOULD NOT BE CHANGED.
+// Recommended to document in the OSF pre-registration: "The higher speed in
+// the Coordination condition's Phase 4 is an operational consequence of the
+// synchrony manipulation; noted as a possible confound and addressed via a
+// manipulation check measuring perceived synchrony separately from perceived
+// speed/activity level."
 // ============================================================================
-const SHARED_APPROACH_PHASE_DURATION_MS = 12000; // 16-28s penceresi, tüm koşullarda aynı
+const SHARED_APPROACH_PHASE_DURATION_MS = 12000; // 16-28s window, identical across all conditions
 
 function createMarkerElement(person) {
     const clusterEl = document.createElement("div");
@@ -91,7 +93,7 @@ const PAUSE_DURATION            = 4 * 1000;  // 12 - 16s: Pause phase
 const APPROACH_DURATION         = 12 * 1000; // 16 - 28s: Movement towards each other (joining)
 const COORDINATED_MOVE_DURATION = 12 * 1000; // 28 - 40s: Out-and-back joint movement phase
 const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION + COORDINATED_MOVE_DURATION; // 40s Total
-const FINAL_HOLD_DURATION       = 1000; // 40-41s: son karede bekleme
+const FINAL_HOLD_DURATION       = 1000; // 40-41s: hold on the final frame
 
 let startTime = null;
 
@@ -110,7 +112,7 @@ const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offse
 const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
 
 // Direction vector for joint out-and-back movement (moving together towards east/north-east and returning)
-// PENDING: bu değerler Faz 4 hız kararına göre güncellenebilir.
+// See the "PHASE 4 DECISION" note above — these values are intentional and final.
 const jointOffsetLng = 0.0020;
 const jointOffsetLat = 0.0015;
 
@@ -166,9 +168,12 @@ function animateNodes(timestamp) {
 
     } else {
         // PHASE 4: SYNCHRONIZED OUT-AND-BACK MOVEMENT (28s - 40s)
+        // Both agents move together in the exact same direction and return to the meeting point, 
+        // using a triangle wave function to guarantee identical speed, displacement, and duration.
         const coordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION);
         const progressCoord = coordElapsed / COORDINATED_MOVE_DURATION;
         
+        // Triangle wave: goes from 0 to 1 (at halfway, t=6s) and back to 0 (at t=12s)
         const triangleWave = progressCoord <= 0.5 ? (progressCoord * 2) : (2 - progressCoord * 2);
 
         currentG_Lng = targetG[0] + (jointOffsetLng * triangleWave);
@@ -190,7 +195,7 @@ function animateNodes(timestamp) {
 }
 
 // ============================================================================
-// QUALTRICS HANDSHAKE (otomatik yönlendirme + alım onayı kaydı)
+// QUALTRICS HANDSHAKE (auto-advance + receipt-acknowledgment logging)
 // ============================================================================
 const SESSION_ID = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
 let qualtricsAckReceived = false;
@@ -216,12 +221,12 @@ function sendCompletionSignal(reason) {
         try {
             if (window.parent) window.parent.postMessage(payload, "*");
         } catch (e) {
-            console.warn("postMessage gönderilemedi:", e);
+            console.warn("postMessage failed:", e);
         }
         if (qualtricsAckReceived || attempts >= MAX_ATTEMPTS) {
             clearInterval(handshakeIntervalId);
             if (!qualtricsAckReceived) {
-                console.warn("Qualtrics'ten onay (ack) alınamadı. Manuel devam butonu gösteriliyor.");
+                console.warn("No acknowledgment (ack) received from Qualtrics. Showing manual continue button.");
                 showManualContinueFallback();
             }
         }
@@ -252,7 +257,7 @@ function showManualContinueFallback() {
             if (window.parent) {
                 window.parent.postMessage({ type: "MAP_ANIMATION_COMPLETE", sessionId: SESSION_ID, reason: "manual-fallback", timestamp: Date.now() }, "*");
             }
-        } catch (e) { /* yut */ }
+        } catch (e) { /* ignore */ }
         wrap.remove();
     });
     wrap.appendChild(btn);
@@ -260,12 +265,12 @@ function showManualContinueFallback() {
 }
 
 // ============================================================================
-// MAKSİMUM TIMEOUT (katılımcı asla takılı kalmasın)
+// MAXIMUM TIMEOUT (the participant should never remain stuck)
 // ============================================================================
 const MAX_EXPERIMENT_TIMEOUT_MS = 90 * 1000;
 setTimeout(() => {
     if (!hasSentCompletion) {
-        console.warn("Maksimum süre aşıldı, katılımcı otomatik olarak ilerletiliyor.");
+        console.warn("Maximum duration exceeded; auto-advancing the participant.");
         sendCompletionSignal("timeout");
     }
 }, MAX_EXPERIMENT_TIMEOUT_MS);
@@ -323,7 +328,7 @@ if (submitBtn) {
 }
 
 // ============================================================================
-// HARİTA YÜKLENEMEZSE AÇIK BİR FALLBACK
+// CLEAR FALLBACK IF THE MAP FAILS TO LOAD
 // ============================================================================
 let mapHasLoaded = false;
 let mapLoadFallbackTriggered = false;
@@ -380,7 +385,7 @@ try {
 
         mapLoadTimeoutId = setTimeout(() => {
             if (!mapHasLoaded) {
-                console.warn("Harita belirlenen süre içinde yüklenmedi (timeout).");
+                console.warn("Map did not load within the allotted time (timeout).");
                 showMapLoadFallback();
             }
         }, MAP_LOAD_TIMEOUT_MS);
@@ -392,14 +397,14 @@ try {
         });
 
         map.on('error', (e) => {
-            console.error("Harita hata event'i:", e);
+            console.error("Map error event:", e);
             if (!mapHasLoaded) showMapLoadFallback();
         });
     } else {
-        console.warn("MapLibre CDN kütüphanesi yüklenemedi.");
+        console.warn("MapLibre CDN library failed to load.");
         showMapLoadFallback();
     }
 } catch (error) {
-    console.error("Harita başlatma hatası:", error);
+    console.error("Map initialization failed:", error);
     showMapLoadFallback();
 }
