@@ -18,6 +18,26 @@ const people = [
     { id: "mainNode", markerType: "blue-pulse-dot" }
 ];
 
+// ============================================================================
+// SHARED CROSS-CONDITION MOVEMENT CONFIG
+// Faz 3 (16-28s) hızı burada zaten Joining ve Control (düzeltilmiş) ile eşleşiyor:
+// her ajan gerçek G-M mesafesinin (0.5 - offsetPercent) kadarını (≈524.06m)
+// 12 saniyede kat ediyor → ≈43.67 m/s. Bu koşulda DEĞİŞİKLİK GEREKMİYOR.
+//
+// Faz 4 (28-40s) KARARI (kesinleşti): Şu anki genlik (jointOffsetLng=0.0020,
+// jointOffsetLat=0.0015) ≈238.8m'lik bir zirve yer değiştirmesine ve ≈39.8 m/s
+// hıza karşılık geliyor. Bu, Control/Joining'in Faz 4'ündeki yavaş bağımsız
+// drift'ten (~cm/s) belirgin şekilde daha hızlı — ANCAK bu fark BİLİNÇLİ OLARAK
+// KORUNMUŞTUR: senkroni manipülasyonunun operasyonel/yapısal bir sonucu olarak
+// kabul edilmiştir (senkronize/birlikte hareket doğası gereği daha büyük ortak
+// yer değiştirme gerektirir). BU DEĞERLER DEĞİŞTİRİLMEMELİDİR.
+// OSF ön-kayıtta belgelenmesi önerilir: "Coordination koşulunun Faz 4'ündeki
+// daha yüksek hız, senkroni manipülasyonunun operasyonel bir sonucudur; olası
+// confound olarak not edilmiş, manipülasyon kontrolü ile ayrıca ölçülmesi
+// planlanmıştır (algılanan senkroni vs. algılanan hız/hareketlilik)."
+// ============================================================================
+const SHARED_APPROACH_PHASE_DURATION_MS = 12000; // 16-28s penceresi, tüm koşullarda aynı
+
 function createMarkerElement(person) {
     const clusterEl = document.createElement("div");
     clusterEl.className = "marker-cluster";
@@ -36,14 +56,18 @@ function createMarkerElement(person) {
         agentEl.appendChild(mapsDotContainer);
         const labelEl = document.createElement("div");
         labelEl.className = "agent-label";
-        labelEl.textContent = userNickname || "User";
+        labelEl.textContent = userNickname || "Kullanıcı";
         agentEl.appendChild(labelEl);
+        agentEl.setAttribute("role", "img");
+        agentEl.setAttribute("aria-label", (userNickname || "Kullanıcı") + " konumu, harita üzerinde");
     } 
     else if (person.markerType === "grey-letter-dot") {
         const greyDot = document.createElement("div");
         greyDot.className = "experimental-grey-letter-dot";
         greyDot.textContent = person.initial;
         agentEl.appendChild(greyDot);
+        agentEl.setAttribute("role", "img");
+        agentEl.setAttribute("aria-label", "Katılımcı " + person.initial + " konumu, harita üzerinde");
     }
     clusterEl.appendChild(agentEl);
     return clusterEl;
@@ -60,13 +84,14 @@ function initMarkers() {
 }
 
 // ============================
-// TIMED LINEAR INTERPOLATION ENGINE (CONDITION 2 - SYNCHRONIZED OUT-AND-BACK)
+// TIMED LINEAR INTERPOLATION ENGINE (COORDINATION CONDITION - SYNCHRONIZED OUT-AND-BACK)
 // ============================
 const PRE_SEQUENCE_DURATION     = 12 * 1000; // 0 - 12s: Standardized neutral baseline phase
 const PAUSE_DURATION            = 4 * 1000;  // 12 - 16s: Pause phase
 const APPROACH_DURATION         = 12 * 1000; // 16 - 28s: Movement towards each other (joining)
 const COORDINATED_MOVE_DURATION = 12 * 1000; // 28 - 40s: Out-and-back joint movement phase
 const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION + COORDINATED_MOVE_DURATION; // 40s Total
+const FINAL_HOLD_DURATION       = 1000; // 40-41s: son karede bekleme
 
 let startTime = null;
 
@@ -85,6 +110,7 @@ const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offse
 const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
 
 // Direction vector for joint out-and-back movement (moving together towards east/north-east and returning)
+// PENDING: bu değerler Faz 4 hız kararına göre güncellenebilir.
 const jointOffsetLng = 0.0020;
 const jointOffsetLat = 0.0015;
 
@@ -110,9 +136,7 @@ function animateNodes(timestamp) {
     const pausedM = [startM[0] + driftM_X_end, startM[1] + driftM_Y_end];
 
     if (elapsed < PRE_SEQUENCE_DURATION) {
-        // =========================================================================
         // PHASE 1: STANDARDIZED NEUTRAL BASELINE PHASE (0s - 12s)
-        // =========================================================================
         const driftG_X = Math.sin(elapsed / 1800) * BASELINE_DRIFT_RADIUS;
         const driftG_Y = Math.cos(elapsed / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
         const driftM_X = Math.cos(elapsed / 2200) * BASELINE_DRIFT_RADIUS;
@@ -124,18 +148,14 @@ function animateNodes(timestamp) {
         currentM_Lat = startM[1] + driftM_Y;
 
     } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION)) {
-        // =========================================================================
         // PHASE 2: PAUSE PHASE (12s - 16s)
-        // =========================================================================
         currentG_Lng = pausedG[0];
         currentG_Lat = pausedG[1];
         currentM_Lng = pausedM[0];
         currentM_Lat = pausedM[1];
 
     } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION)) {
-        // =========================================================================
         // PHASE 3: APPROACH / JOINING PHASE (16s - 28s)
-        // =========================================================================
         const approachElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION);
         const progress = approachElapsed / APPROACH_DURATION;
 
@@ -145,15 +165,10 @@ function animateNodes(timestamp) {
         currentM_Lat = pausedM[1] + (targetM[1] - pausedM[1]) * progress;
 
     } else {
-        // =========================================================================
         // PHASE 4: SYNCHRONIZED OUT-AND-BACK MOVEMENT (28s - 40s)
-        // =========================================================================
-        // Both agents move together in the exact same direction and return to the meeting point, 
-        // using a triangle wave function to guarantee identical speed, displacement, and duration.
         const coordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION);
         const progressCoord = coordElapsed / COORDINATED_MOVE_DURATION;
         
-        // Triangle wave: goes from 0 to 1 (at halfway, t=6s) and back to 0 (at t=12s)
         const triangleWave = progressCoord <= 0.5 ? (progressCoord * 2) : (2 - progressCoord * 2);
 
         currentG_Lng = targetG[0] + (jointOffsetLng * triangleWave);
@@ -169,12 +184,91 @@ function animateNodes(timestamp) {
         requestAnimationFrame(animateNodes);
     } else {
         setTimeout(() => {
-            if (window.parent) {
-                window.parent.postMessage("mapAnimationFinished", "*");
-            }
-        }, 1000); 
+            sendCompletionSignal("normal");
+        }, FINAL_HOLD_DURATION);
     }
 }
+
+// ============================================================================
+// QUALTRICS HANDSHAKE (otomatik yönlendirme + alım onayı kaydı)
+// ============================================================================
+const SESSION_ID = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+let qualtricsAckReceived = false;
+let hasSentCompletion = false;
+let handshakeIntervalId = null;
+
+function sendCompletionSignal(reason) {
+    if (hasSentCompletion) return;
+    hasSentCompletion = true;
+
+    const payload = {
+        type: "MAP_ANIMATION_COMPLETE",
+        sessionId: SESSION_ID,
+        reason: reason,          // "normal" | "timeout" | "map-load-failed" | "manual-fallback"
+        nickname: userNickname,
+        timestamp: Date.now()
+    };
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 15;
+    handshakeIntervalId = setInterval(() => {
+        attempts++;
+        try {
+            if (window.parent) window.parent.postMessage(payload, "*");
+        } catch (e) {
+            console.warn("postMessage gönderilemedi:", e);
+        }
+        if (qualtricsAckReceived || attempts >= MAX_ATTEMPTS) {
+            clearInterval(handshakeIntervalId);
+            if (!qualtricsAckReceived) {
+                console.warn("Qualtrics'ten onay (ack) alınamadı. Manuel devam butonu gösteriliyor.");
+                showManualContinueFallback();
+            }
+        }
+    }, 400);
+}
+
+window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "MAP_ANIMATION_ACK" && event.data.sessionId === SESSION_ID) {
+        qualtricsAckReceived = true;
+    }
+});
+
+function showManualContinueFallback() {
+    if (document.getElementById("manual-continue-fallback")) return;
+    const wrap = document.createElement("div");
+    wrap.id = "manual-continue-fallback";
+    wrap.setAttribute("role", "alert");
+    wrap.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);" +
+        "background:#fff;border:1px solid #ccc;border-radius:8px;padding:14px 18px;" +
+        "box-shadow:0 2px 10px rgba(0,0,0,0.15);z-index:9999;text-align:center;font-family:sans-serif;";
+    wrap.innerHTML = '<p style="margin:0 0 10px 0;">Bu bölüm tamamlandı. Devam etmek için lütfen aşağıdaki butona tıklayın.</p>';
+    const btn = document.createElement("button");
+    btn.textContent = "Devam Et";
+    btn.setAttribute("aria-label", "Ankete devam et");
+    btn.style.cssText = "padding:8px 20px;border:none;border-radius:6px;background:#2b6cb0;color:#fff;font-size:15px;cursor:pointer;";
+    btn.addEventListener("click", () => {
+        try {
+            if (window.parent) {
+                window.parent.postMessage({ type: "MAP_ANIMATION_COMPLETE", sessionId: SESSION_ID, reason: "manual-fallback", timestamp: Date.now() }, "*");
+            }
+        } catch (e) { /* yut */ }
+        wrap.remove();
+    });
+    wrap.appendChild(btn);
+    document.body.appendChild(wrap);
+}
+
+// ============================================================================
+// MAKSİMUM TIMEOUT (katılımcı asla takılı kalmasın)
+// ============================================================================
+const MAX_EXPERIMENT_TIMEOUT_MS = 90 * 1000;
+setTimeout(() => {
+    if (!hasSentCompletion) {
+        console.warn("Maksimum süre aşıldı, katılımcı otomatik olarak ilerletiliyor.");
+        sendCompletionSignal("timeout");
+    }
+}, MAX_EXPERIMENT_TIMEOUT_MS);
 
 // ============================
 // EXPERIMENT FLOW ENGINE
@@ -204,8 +298,8 @@ function startExperimentFlow() {
 }
 
 function handleLoginSubmit() {
-    const val = nicknameInput ? nicknameInput.value.trim() : "User";
-    if (val === "") { alert("Please enter a valid nickname."); return; }
+    const val = nicknameInput ? nicknameInput.value.trim() : "Katılımcı";
+    if (val === "") { alert("Lütfen geçerli bir takma ad girin."); return; }
     userNickname = val;
     if (flowScreen) {
         flowScreen.style.opacity = "0";
@@ -221,8 +315,50 @@ function handleLoginSubmit() {
 
 if (submitBtn) submitBtn.addEventListener("click", handleLoginSubmit);
 if (nicknameInput) {
+    nicknameInput.setAttribute("aria-label", "Takma adınızı girin");
     nicknameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleLoginSubmit(); });
 }
+if (submitBtn) {
+    submitBtn.setAttribute("aria-label", "Takma adı gönder ve devam et");
+}
+
+// ============================================================================
+// HARİTA YÜKLENEMEZSE AÇIK BİR FALLBACK
+// ============================================================================
+let mapHasLoaded = false;
+let mapLoadFallbackTriggered = false;
+
+function showMapLoadFallback() {
+    if (mapLoadFallbackTriggered) return;
+    mapLoadFallbackTriggered = true;
+
+    const mapContainer = document.getElementById("map");
+    if (mapContainer) mapContainer.style.visibility = "hidden";
+
+    const fallback = document.createElement("div");
+    fallback.id = "map-load-fallback";
+    fallback.setAttribute("role", "alert");
+    fallback.setAttribute("aria-live", "assertive");
+    fallback.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;" +
+        "display:flex;align-items:center;justify-content:center;background:#f7f7f7;" +
+        "font-family:sans-serif;text-align:center;padding:24px;box-sizing:border-box;z-index:5000;";
+    fallback.innerHTML =
+        '<div style="max-width:420px;">' +
+        '<p style="font-size:17px;color:#333;margin-bottom:8px;">Harita şu anda yüklenemedi.</p>' +
+        '<p style="font-size:14px;color:#666;">Bağlantınız kontrol ediliyor, lütfen bekleyiniz. Bu ekran otomatik olarak ilerleyecektir.</p>' +
+        "</div>";
+    document.body.appendChild(fallback);
+
+    if (!animationStarted) {
+        animationStarted = true;
+        setTimeout(() => {
+            sendCompletionSignal("map-load-failed");
+        }, TOTAL_ANIMATION_DURATION + FINAL_HOLD_DURATION);
+    }
+}
+
+const MAP_LOAD_TIMEOUT_MS = 8000;
+let mapLoadTimeoutId = null;
 
 // ============================
 // FAIL-SAFE INITIALIZATION BLOCK
@@ -242,12 +378,28 @@ try {
             pixelRatio: window.devicePixelRatio || 2 
         });
 
+        mapLoadTimeoutId = setTimeout(() => {
+            if (!mapHasLoaded) {
+                console.warn("Harita belirlenen süre içinde yüklenmedi (timeout).");
+                showMapLoadFallback();
+            }
+        }, MAP_LOAD_TIMEOUT_MS);
+
         map.on('load', () => {
+            mapHasLoaded = true;
+            if (mapLoadTimeoutId) clearTimeout(mapLoadTimeoutId);
             map.getCanvas().style.filter = 'grayscale(0.6) contrast(1.1) brightness(0.95) hue-rotate(25deg)';
         });
+
+        map.on('error', (e) => {
+            console.error("Harita hata event'i:", e);
+            if (!mapHasLoaded) showMapLoadFallback();
+        });
     } else {
-        console.warn("MapLibre CDN library failed to load, but the experimental interface continues running.");
+        console.warn("MapLibre CDN kütüphanesi yüklenemedi.");
+        showMapLoadFallback();
     }
 } catch (error) {
-    console.error("Map initialization failed:", error);
+    console.error("Harita başlatma hatası:", error);
+    showMapLoadFallback();
 }
