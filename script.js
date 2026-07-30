@@ -20,21 +20,21 @@ const people = [
 
 // ============================================================================
 // SHARED CROSS-CONDITION MOVEMENT CONFIG
-// Faz 3 (16-28s) hızı burada zaten Joining ve Control (düzeltilmiş) ile eşleşiyor:
-// her ajan gerçek G-M mesafesinin (0.5 - offsetPercent) kadarını (≈524.06m)
-// 12 saniyede kat ediyor → ≈43.67 m/s. Bu koşulda DEĞİŞİKLİK GEREKMİYOR.
+// Phase 3 (16–28s) speed already matches Joining and Control (corrected) here:
+// each agent covers a distance equal to (0.5 – offsetPercent) of the actual G-M distance (≈524.06 m)
+// in 12 seconds → ≈43.67 m/s. NO CHANGE IS REQUIRED under these conditions.
 //
-// Faz 4 (28-40s) KARARI (kesinleşti): Şu anki genlik (jointOffsetLng=0.0020,
-// jointOffsetLat=0.0015) ≈238.8m'lik bir zirve yer değiştirmesine ve ≈39.8 m/s
-// hıza karşılık geliyor. Bu, Control/Joining'in Faz 4'ündeki yavaş bağımsız
-// drift'ten (~cm/s) belirgin şekilde daha hızlı — ANCAK bu fark BİLİNÇLİ OLARAK
-// KORUNMUŞTUR: senkroni manipülasyonunun operasyonel/yapısal bir sonucu olarak
-// kabul edilmiştir (senkronize/birlikte hareket doğası gereği daha büyük ortak
-// yer değiştirme gerektirir). BU DEĞERLER DEĞİŞTİRİLMEMELİDİR.
-// OSF ön-kayıtta belgelenmesi önerilir: "Coordination koşulunun Faz 4'ündeki
-// daha yüksek hız, senkroni manipülasyonunun operasyonel bir sonucudur; olası
-// confound olarak not edilmiş, manipülasyon kontrolü ile ayrıca ölçülmesi
-// planlanmıştır (algılanan senkroni vs. algılanan hız/hareketlilik)."
+// Phase 4 (28–40 s) DECISION (finalized): The current magnitude (jointOffsetLng=0.0020,
+// jointOffsetLat=0.0015) corresponds to a peak displacement of ≈238.8 m and a speed of ≈39.8 m/s
+// velocity. This is significantly faster than the slow independent
+// drift (~cm/s) in Phase 4 of Control/Joining — HOWEVER, this difference has been INTENTIONALLY
+// PRESERVED: it is considered an operational/structural consequence of
+// synchronous manipulation (synchronized/joint movement inherently requires greater
+// joint displacement). THESE VALUES MUST NOT BE CHANGED.
+// It is recommended to document this in the OSF pre-registration: “The higher speed in Phase 4 of the Coordination condition
+// is an operational consequence of the synchrony manipulation; noted as a potential
+// confound, it is planned to be measured separately via manipulation control
+// (perceived synchrony vs. perceived speed/mobility).”
 // ============================================================================
 const SHARED_APPROACH_PHASE_DURATION_MS = 12000; // 16-28s penceresi, tüm koşullarda aynı
 
