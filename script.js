@@ -1,44 +1,302 @@
+/* ============================================================================
+ * LOCATION-SHARING SOCIAL DISCONNECTION PARADIGM
+ * Condition: Spatial Joining and Coordination (SJC)
+ * Timing source of truth: "CRIP - Experimental Flow - Exclusion Map Study"
+ *
+ * Everything below the CONDITION BLOCK is IDENTICAL across the three repos
+ * (byte-for-byte identical to IM's and SJ's copies).
+ * To change a condition, edit ONLY the CONDITION BLOCK.
+ *
+ * Flow (t = 0 is the moment the participant submits their nickname):
+ *   Block 0  0-4 s    Starting position, stable (idle GPS jitter only)
+ *   Block 1  4-16 s   Synchronous approach: both agents walk in a straight
+ *                      line toward each other until they meet (12 s)
+ *   Block 2  16-18 s  Both agents stop between blocks (2 s)
+ *   Block 3  18-30 s  Synchronous and Coordinated movement (12 s). Both agents
+ *                      move together in identical direction, distance, and speed
+ *                      away from the meeting point for 6s, then return for 6s.
+ *   Block 4  30-33 s  Both agents remain stationary before hand-back to survey
+ *   Total sequence: 33 s.
+ *
+ * Design constraints (identical in every condition, verified numerically):
+ *   - Walking speed 1.5 m/s (5.4 km/h), pedestrian pace, identical in every
+ *     condition and every block.
+ *   - Each agent pauses for exactly 1 s, twice, during Block 1 and again
+ *     twice during Block 3, at independent (non-coinciding) times.
+ *   - Each agent walks for exactly 10 s of the 12 s in Block 1 (15.0 m) and
+ *     10 s of the 12 s in Block 3 (15.0 m): 30.0 m total per agent, matched
+ *     to IM's total.
+ *   - G-M start separation: 40.0 m, identical in every condition (see the
+ *     note on the HUB/START_G/START_M geometry below for why this specific
+ *     value was chosen -- it is not arbitrary).
+ *   - Icons never overlap and never leave the zoom-18 viewport.
+ *   - MANIPULATION: Block 1 is a synchronous, linear, direct approach.
+ *     Block 3 introduces a synchronous and coordinated movement where both 
+ *     agents travel identically side-by-side, maintaining their meeting 
+ *     distance, heading away and then returning to the meeting point.
+ * ========================================================================== */
+
+/* ==========================================================================
+ * CONDITION BLOCK -- the only part that differs between the three repos
+ * ========================================================================== */
+const CONDITION = "SJC";
+const CONDITION_LABEL = "Spatial Joining and Coordination";
+
+// -- Block 1 (local t = 0-12 s within the block) --------------------------
+// Both agents walk in a single straight line toward the HUB (which sits
+// exactly on the midpoint of the G-M axis by construction -- see HUB /
+// START_G / START_M below), so walking toward the hub is walking directly
+// toward the other agent. G's local bearing toward the hub is 75 deg; M's
+// is 255 deg (exactly opposite, as required for a straight line between
+// two points on opposite sides of the same hub).
+// Each agent walks 15.0 m (10 s at 1.5 m/s) with two independent 1 s
+// pauses, for a 12 s block. With a 40.0 m start separation, 15.0 m + 15.0 m
+// of closure leaves them 10.0 m apart at the end of Block 1 -- a clear,
+// unambiguous overlap of the 32 px markers at zoom 18 (empirically
+// re-verified below including GPS jitter, not just the deterministic path).
+// G's pauses fall at local t = 4-5 s and 9-10 s.
+const SCHEDULE_G_BLOCK1 = [
+    { d: 4, b: 75 }, { d: 1, b: null }, { d: 4, b: 75 },
+    { d: 1, b: null }, { d: 2, b: 75 }
+];
+// M's pauses fall at local t = 3-4 s and 8-9 s -- never the same second as
+// G's, so the pausing itself still reads as independent even though the
+// overall approach is synchronous/linear.
+const SCHEDULE_M_BLOCK1 = [
+    { d: 3, b: 255 }, { d: 1, b: null }, { d: 4, b: 255 },
+    { d: 1, b: null }, { d: 3, b: 255 }
+];
+
+// -- Block 2 (both agents fully stationary for 2 s) ------------------------
+const SCHEDULE_BLOCK2_PAUSE = [{ d: 2, b: null }];
+
+// -- Block 3 (local t = 0-12 s within the block) ---------------------------
+// Both G and M move synchronously and coordinated. They travel perpendicular 
+// to their separation axis (bearing 345 for 6s, then 165 for 6s) to maintain 
+// their exact 10m meeting distance side-by-side. 
+// Each walks 7.5 m out and 7.5 m back (10 s total walking, 2 s pausing each).
+// G's pauses fall at local t = 1-2 s and 7-8 s.
+const SCHEDULE_G_BLOCK3 = [
+    { d: 1, b: 345 }, { d: 1, b: null }, { d: 4, b: 345 },
+    { d: 1, b: 165 }, { d: 1, b: null }, { d: 4, b: 165 }
+];
+// M's pauses fall at local t = 4-5 s and 10-11 s.
+const SCHEDULE_M_BLOCK3 = [
+    { d: 4, b: 345 }, { d: 1, b: null }, { d: 1, b: 345 },
+    { d: 4, b: 165 }, { d: 1, b: null }, { d: 1, b: 165 }
+];
+
+const SCHEDULE_G = SCHEDULE_G_BLOCK1.concat(SCHEDULE_BLOCK2_PAUSE, SCHEDULE_G_BLOCK3);
+const SCHEDULE_M = SCHEDULE_M_BLOCK1.concat(SCHEDULE_BLOCK2_PAUSE, SCHEDULE_M_BLOCK3);
+/* ======================= END OF CONDITION BLOCK ========================== */
+/* ==========================================================================
+ * SHARED GEOMETRY AND TIMING (identical in all three conditions)
+ * ========================================================================== */
+const MAP_CENTER = [32.870379, 39.921936]; // Ankara -- set with placement-tool.html
+
+// Rotates the whole scene about MAP_CENTER to align the G-M axis with a street.
+// Rotation is an isometry: distances, speeds, separations and synchrony indices
+// are all unchanged by it, so every audit result below holds for any value.
+const SCENE_ROTATION_DEG = 55;
+
+function rot(bearingDeg) { return (bearingDeg + SCENE_ROTATION_DEG + 360) % 360; }
+const MAP_ZOOM = 18.0;                     // locked (min = max = 18.0), 0.458 m/pixel
+
+const WALK_SPEED_MPS = 1.5;                // 5.4 km/h -- normal walking pace
+
+// Block durations (ms), matching the experimental-flow spec exactly.
+// Block 0 is the stable/idle window; Blocks 1 and 3 are the condition's
+// SCHEDULE_G / SCHEDULE_M movement (built above); Block 2 is the shared
+// stop-between-blocks pause; Block 4 is the final stationary hold before
+// hand-back to the survey. Every boundary is a whole number of GPS fixes.
+const T_STABLE = 4000;   //  0 -  4 s   idle GPS jitter, agents at start position
+const T_BLOCK1 = 12000;  //  4 - 16 s   Block 1 movement (in SCHEDULE_*)
+const T_BLOCK2 =  2000;  // 16 - 18 s   both agents stationary (in SCHEDULE_*)
+const T_BLOCK3 = 12000;  // 18 - 30 s   Block 3 movement (in SCHEDULE_*)
+const T_BLOCK4 =  3000;  // 30 - 33 s   final stationary hold, then hand-back
+const TOTAL_ANIMATION_DURATION = T_STABLE + T_BLOCK1 + T_BLOCK2 + T_BLOCK3 + T_BLOCK4; // 33000
+const FINAL_HOLD_DURATION = 0; // Block 4 above already is the final hold
+
+const EARTH_RADIUS_M = 6378137;
+
+function offsetMeters(origin, bearingDeg, meters) {
+    const b = bearingDeg * Math.PI / 180;
+    const dNorth = meters * Math.cos(b);
+    const dEast  = meters * Math.sin(b);
+    const dLat = (dNorth / EARTH_RADIUS_M) * 180 / Math.PI;
+    const dLng = (dEast / (EARTH_RADIUS_M * Math.cos(origin[1] * Math.PI / 180))) * 180 / Math.PI;
+    return [origin[0] + dLng, origin[1] + dLat];
+}
+
+// Start positions are derived from a single hub point and a single offset, so
+// the starting geometry is identical across all three conditions by
+// construction. G and M start 40.0 m apart -- chosen so that SJ/SJC's
+// Block 1 (each agent contributes 15.0 m of the fixed 10 s-of-walking
+// budget, closing 30.0 m combined) ends with them 10.0 m apart: a clear,
+// unambiguous ~32% overlap of the 32 px markers at zoom 18, not just a
+// touch at the edges. IM does not require a meeting, but the geometry must
+// be identical across all three conditions per the flow spec, so IM uses
+// this same 40.0 m separation. The participant sits on the perpendicular
+// bisector of the G-M axis, roughly equidistant from each, so the geometry
+// never tilts toward one agent.
+const HUB = offsetMeters(MAP_CENTER, rot(0), 12);
+const START_G = offsetMeters(HUB, rot(255), 20.0);
+const START_M = offsetMeters(HUB, rot(75), 20.0);
+const START_U = offsetMeters(HUB, rot(165), 50);
+
+const positions = { leftNode: START_G, rightNode: START_M, mainNode: START_U };
+
+const people = [
+    { id: "leftNode",  markerType: "grey-letter-dot", initial: "G" },
+    { id: "rightNode", markerType: "grey-letter-dot", initial: "M" },
+    { id: "mainNode",  markerType: "blue-pulse-dot" }
+];
+
+/* ==========================================================================
+ * TRAJECTORY ENGINE
+ * Converts a segment schedule into timed waypoints, then interpolates.
+ * Speed and distance are SPECIFIED here, never emergent from trig functions.
+ * ========================================================================== */
+// An orbit segment { d, o: { rev, a0, dir } } walks a small circle around a
+// point, starting from wherever the agent currently is. The radius is DERIVED
+// from the duration so the agent still covers exactly WALK_SPEED_MPS * d
+// metres -- a tight orbit walked for a long time covers the same distance as
+// a long straight walk. This is how conditions stay matched on distance and
+// speed while looking completely different.
+const ORBIT_SAMPLES_PER_REV = 24;
+const ORBIT_UNIT_PERIM = 2 * ORBIT_SAMPLES_PER_REV * Math.sin(Math.PI / ORBIT_SAMPLES_PER_REV);
+
+function buildWaypoints(startPos, segments) {
+    let pos = startPos, t = 0;
+    const keys = [{ t: 0, pos: pos }];
+    for (const seg of segments) {
+        if (seg.o) {
+            const rev = seg.o.rev, dir = seg.o.dir || 1;
+            const radius = WALK_SPEED_MPS * seg.d / (rev * ORBIT_UNIT_PERIM);
+            const centre = offsetMeters(pos, rot(seg.o.a0 + 180), radius);
+            const n = Math.max(8, Math.round(rev * ORBIT_SAMPLES_PER_REV));
+            for (let i = 1; i <= n; i++) {
+                t += (seg.d * 1000) / n;
+                pos = offsetMeters(centre, rot(seg.o.a0 + dir * 360 * rev * (i / n)), radius);
+                keys.push({ t: t, pos: pos });
+            }
+        } else {
+            t += seg.d * 1000;
+            if (seg.b !== null) pos = offsetMeters(pos, rot(seg.b), WALK_SPEED_MPS * seg.d);
+            keys.push({ t: t, pos: pos });
+        }
+    }
+    return keys;
+}
+
+// Pure linear interpolation would make an agent jump from standing still to
+// full walking speed in one frame, and stop just as abruptly. Easing the
+// fraction within each segment produces natural acceleration/deceleration.
+// Because the easing is applied to the fraction, not the endpoints, distance
+// and duration per segment are unchanged, so cross-condition matching holds.
+const EASE_MIX = 0.30;   // 0 = constant speed, 1 = full smoothstep
+function easeFraction(f) {
+    const smooth = f * f * (3 - 2 * f);
+    return (1 - EASE_MIX) * f + EASE_MIX * smooth;
+}
+
+function positionAt(keys, tMs) {
+    if (tMs <= 0) return keys[0].pos;
+    for (let i = 1; i < keys.length; i++) {
+        if (tMs <= keys[i].t) {
+            const a = keys[i - 1], b = keys[i];
+            const f = easeFraction((tMs - a.t) / (b.t - a.t));
+            return [a.pos[0] + (b.pos[0] - a.pos[0]) * f,
+                    a.pos[1] + (b.pos[1] - a.pos[1]) * f];
+        }
+    }
+    return keys[keys.length - 1].pos;
+}
+
+// Deterministic GPS jitter: two sine components per axis with agent-specific
+// frequencies and phases, so G and M are never correlated by chance. It is
+// deterministic (not Math.random) so the sequence is identical for every
+// participant.
+const JITTER = {
+    G: { fx1: 0.31, px1: 0.00, fx2: 0.53, px2: 1.70, fy1: 0.24, py1: 2.20, fy2: 0.47, py2: 0.40 },
+    M: { fx1: 0.27, px1: 2.40, fx2: 0.61, px2: 0.90, fy1: 0.35, py1: 1.10, fy2: 0.19, py2: 2.90 }
+};
+function jitterMeters(who, tSec, amplitude) {
+    const j = JITTER[who];
+    const dx = (Math.sin(tSec * j.fx1 + j.px1) * 0.6 + Math.sin(tSec * j.fx2 + j.px2) * 0.4) * amplitude;
+    const dy = (Math.sin(tSec * j.fy1 + j.py1) * 0.6 + Math.sin(tSec * j.fy2 + j.py2) * 0.4) * amplitude;
+    return [dx, dy];
+}
+const JITTER_IDLE_M = 2.0;   // during the stable window (Block 0)
+const JITTER_MOVE_M = 0.5;   // while walking, so paths are not perfectly straight
+const JITTER_RAMP_MS = 2000; // amplitude eases between the two, never steps --
+                              // a step would teleport the marker and register
+                              // as a large instantaneous speed spike.
+function jitterAmplitude(elapsedMs) {
+    const moveStart = T_STABLE;
+    const a = moveStart - JITTER_RAMP_MS / 2, b = moveStart + JITTER_RAMP_MS / 2;
+    if (elapsedMs <= a) return JITTER_IDLE_M;
+    if (elapsedMs >= b) return JITTER_MOVE_M;
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * (elapsedMs - a) / JITTER_RAMP_MS);
+    return JITTER_IDLE_M + (JITTER_MOVE_M - JITTER_IDLE_M) * ease;
+}
+
+const WAYPOINTS_G = buildWaypoints(START_G, SCHEDULE_G);
+const WAYPOINTS_M = buildWaypoints(START_M, SCHEDULE_M);
+
+// The agent's real position at a given instant, before the app displays it.
+function truePosition(who, elapsedMs) {
+    const keys = (who === "G") ? WAYPOINTS_G : WAYPOINTS_M;
+    const moveStart = T_STABLE;
+    const base = (elapsedMs < moveStart)
+        ? keys[0].pos
+        : positionAt(keys, elapsedMs - moveStart);
+    const j = jitterMeters(who, elapsedMs / 1000, jitterAmplitude(elapsedMs));
+    let p = offsetMeters(base, 90, j[0]);   // east component
+    p = offsetMeters(p, 0, j[1]);           // north component
+    return p;
+}
+
+/* --------------------------------------------------------------------------
+ * GPS UPDATE CADENCE
+ * A real location-sharing app does not receive a continuous stream. It gets a
+ * fix every few seconds and animates the marker to catch up, then the marker
+ * sits still until the next fix. Rendering the true position at 60 fps looks
+ * smoother than any real app and is one of the strongest cues that a display
+ * is generated rather than live. Sampling it here reproduces the real rhythm.
+ * The two agents use different offsets because two phones never report on the
+ * same clock -- identical update instants would themselves be a tell.
+ * This changes only WHEN a position is shown, never WHERE: the sampled points
+ * lie exactly on the scheduled path, so distance, duration, mean speed and the
+ * matching across conditions are all untouched.
+ * ------------------------------------------------------------------------ */
+const GPS_UPDATE_MS = 1000;   // interval between fixes (1 s so Block 2's 2 s pause renders as a visible stop)
+const GPS_TWEEN_MS  = 900;    // catch-up animation (90% of interval), then the marker rests
+const GPS_OFFSET_MS = { G: 0, M: 500 };   // staggered so G and M never pulse on the same tick
+
+function agentPosition(who, elapsedMs) {
+    const offset = GPS_OFFSET_MS[who];
+    const k = Math.floor((elapsedMs - offset) / GPS_UPDATE_MS);
+    const tFix  = offset + k * GPS_UPDATE_MS;
+    const tPrev = tFix - GPS_UPDATE_MS;
+    const from = truePosition(who, Math.max(0, tPrev));
+    const to   = truePosition(who, Math.max(0, tFix));
+    const since = elapsedMs - tFix;
+    const f = (since >= GPS_TWEEN_MS) ? 1 : easeFraction(since / GPS_TWEEN_MS);
+    return [from[0] + (to[0] - from[0]) * f,
+            from[1] + (to[1] - from[1]) * f];
+}
+
+/* ==========================================================================
+ * BROWSER RUNTIME
+ * Everything below only executes in a browser; the module export at the end
+ * lets an audit script load this file in Node to verify the trajectories.
+ * ========================================================================== */
 let animationStarted = false;
 let userNickname = "";
 let map = null;
 const markerInstances = {};
-
-// ============================
-// ANKARA KML GEOMETRY VERTICES
-// ============================
-const positions = {
-    leftNode:  [32.845501, 39.921050], 
-    rightNode: [32.858463, 39.923483], 
-    mainNode:  [32.858746, 39.913890]  
-};
-
-const people = [
-    { id: "leftNode", markerType: "grey-letter-dot", initial: "G" },
-    { id: "rightNode", markerType: "grey-letter-dot", initial: "M" },
-    { id: "mainNode", markerType: "blue-pulse-dot" }
-];
-
-// ============================================================================
-// SHARED CROSS-CONDITION MOVEMENT CONFIG
-// Phase 3 (16-28s) speed here already matches the Joining condition and the
-// (enlarged-radius) Control condition: each agent travels (0.5 - offsetPercent)
-// of the real G-M distance (≈524.06m) in 12 seconds → ≈43.67 m/s. NO CHANGE
-// NEEDED in this condition.
-//
-// PHASE 4 DECISION (finalized): the current amplitude (jointOffsetLng=0.0020,
-// jointOffsetLat=0.0015) corresponds to a peak displacement of ≈238.8m and a
-// speed of ≈39.8 m/s. This is noticeably faster than Control/Joining's Phase 4
-// slow independent drift (~cm/s) — but this difference has been KEPT
-// INTENTIONALLY: it is treated as an operational/structural consequence of the
-// synchrony manipulation itself (moving together in sync inherently requires a
-// larger shared displacement). THESE VALUES SHOULD NOT BE CHANGED.
-// Recommended to document in the OSF pre-registration: "The higher speed in
-// the Coordination condition's Phase 4 is an operational consequence of the
-// synchrony manipulation; noted as a possible confound and addressed via a
-// manipulation check measuring perceived synchrony separately from perceived
-// speed/activity level."
-// ============================================================================
-const SHARED_APPROACH_PHASE_DURATION_MS = 12000; // 16-28s window, identical across all conditions
+let startTime = null;
 
 function createMarkerElement(person) {
     const clusterEl = document.createElement("div");
@@ -62,8 +320,7 @@ function createMarkerElement(person) {
         agentEl.appendChild(labelEl);
         agentEl.setAttribute("role", "img");
         agentEl.setAttribute("aria-label", (userNickname || "Kullanıcı") + " konumu, harita üzerinde");
-    } 
-    else if (person.markerType === "grey-letter-dot") {
+    } else if (person.markerType === "grey-letter-dot") {
         const greyDot = document.createElement("div");
         greyDot.className = "experimental-grey-letter-dot";
         greyDot.textContent = person.initial;
@@ -79,143 +336,68 @@ function initMarkers() {
     if (!map) return;
     people.forEach(person => {
         const marker = new maplibregl.Marker({ element: createMarkerElement(person), anchor: "center" })
-        .setLngLat(positions[person.id])
-        .addTo(map);
+            .setLngLat(positions[person.id])
+            .addTo(map);
         markerInstances[person.id] = marker;
     });
 }
-
-// ============================
-// TIMED LINEAR INTERPOLATION ENGINE (COORDINATION CONDITION - SYNCHRONIZED OUT-AND-BACK)
-// ============================
-const PRE_SEQUENCE_DURATION     = 12 * 1000; // 0 - 12s: Standardized neutral baseline phase
-const PAUSE_DURATION            = 4 * 1000;  // 12 - 16s: Pause phase
-const APPROACH_DURATION         = 12 * 1000; // 16 - 28s: Movement towards each other (joining)
-const COORDINATED_MOVE_DURATION = 12 * 1000; // 28 - 40s: Out-and-back joint movement phase
-const TOTAL_ANIMATION_DURATION  = PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION + COORDINATED_MOVE_DURATION; // 40s Total
-const FINAL_HOLD_DURATION       = 1000; // 40-41s: hold on the final frame
-
-let startTime = null;
-
-const startG = positions.leftNode;
-const startM = positions.rightNode;
-const startMain = positions.mainNode;
-
-// Target calculation for meeting point
-const midLng = (startG[0] + startM[0]) / 2;
-const midLat = (startG[1] + startM[1]) / 2; 
-const offsetPercent = 0.04; 
-const deltaLng = startM[0] - startG[0];
-const deltaLat = startM[1] - startG[1];
-
-const targetG = [midLng - (deltaLng * offsetPercent), midLat - (deltaLat * offsetPercent)];
-const targetM = [midLng + (deltaLng * offsetPercent), midLat + (deltaLat * offsetPercent)];
-
-// Direction vector for joint out-and-back movement (moving together towards east/north-east and returning)
-// See the "PHASE 4 DECISION" note above — these values are intentional and final.
-const jointOffsetLng = 0.0020;
-const jointOffsetLat = 0.0015;
-
-const BASELINE_DRIFT_RADIUS = 0.0005;
 
 function animateNodes(timestamp) {
     if (!animationStarted) return;
     if (!startTime) startTime = timestamp;
     const elapsed = timestamp - startTime;
 
-    let currentG_Lng = startG[0]; 
-    let currentG_Lat = startG[1];
-    let currentM_Lng = startM[0]; 
-    let currentM_Lat = startM[1];
+    const g = agentPosition("G", elapsed);
+    const m = agentPosition("M", elapsed);
 
-    // Static drift endpoint coordinates at t = 12s (used as anchor for smooth transitions)
-    const driftG_X_end = Math.sin(PRE_SEQUENCE_DURATION / 1800) * BASELINE_DRIFT_RADIUS;
-    const driftG_Y_end = Math.cos(PRE_SEQUENCE_DURATION / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
-    const driftM_X_end = Math.cos(PRE_SEQUENCE_DURATION / 2200) * BASELINE_DRIFT_RADIUS;
-    const driftM_Y_end = Math.sin(PRE_SEQUENCE_DURATION / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
-
-    const pausedG = [startG[0] + driftG_X_end, startG[1] + driftG_Y_end];
-    const pausedM = [startM[0] + driftM_X_end, startM[1] + driftM_Y_end];
-
-    if (elapsed < PRE_SEQUENCE_DURATION) {
-        // PHASE 1: STANDARDIZED NEUTRAL BASELINE PHASE (0s - 12s)
-        const driftG_X = Math.sin(elapsed / 1800) * BASELINE_DRIFT_RADIUS;
-        const driftG_Y = Math.cos(elapsed / 2700) * (BASELINE_DRIFT_RADIUS * 0.8);
-        const driftM_X = Math.cos(elapsed / 2200) * BASELINE_DRIFT_RADIUS;
-        const driftM_Y = Math.sin(elapsed / 3100) * (BASELINE_DRIFT_RADIUS * 0.8);
-
-        currentG_Lng = startG[0] + driftG_X;
-        currentG_Lat = startG[1] + driftG_Y;
-        currentM_Lng = startM[0] + driftM_X;
-        currentM_Lat = startM[1] + driftM_Y;
-
-    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION)) {
-        // PHASE 2: PAUSE PHASE (12s - 16s)
-        currentG_Lng = pausedG[0];
-        currentG_Lat = pausedG[1];
-        currentM_Lng = pausedM[0];
-        currentM_Lat = pausedM[1];
-
-    } else if (elapsed < (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION)) {
-        // PHASE 3: APPROACH / JOINING PHASE (16s - 28s)
-        const approachElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION);
-        const progress = approachElapsed / APPROACH_DURATION;
-
-        currentG_Lng = pausedG[0] + (targetG[0] - pausedG[0]) * progress;
-        currentG_Lat = pausedG[1] + (targetG[1] - pausedG[1]) * progress;
-        currentM_Lng = pausedM[0] + (targetM[0] - pausedM[0]) * progress;
-        currentM_Lat = pausedM[1] + (targetM[1] - pausedM[1]) * progress;
-
-    } else {
-        // PHASE 4: SYNCHRONIZED OUT-AND-BACK MOVEMENT (28s - 40s)
-        // Both agents move together in the exact same direction and return to the meeting point, 
-        // using a triangle wave function to guarantee identical speed, displacement, and duration.
-        const coordElapsed = elapsed - (PRE_SEQUENCE_DURATION + PAUSE_DURATION + APPROACH_DURATION);
-        const progressCoord = coordElapsed / COORDINATED_MOVE_DURATION;
-        
-        // Triangle wave: goes from 0 to 1 (at halfway, t=6s) and back to 0 (at t=12s)
-        const triangleWave = progressCoord <= 0.5 ? (progressCoord * 2) : (2 - progressCoord * 2);
-
-        currentG_Lng = targetG[0] + (jointOffsetLng * triangleWave);
-        currentG_Lat = targetG[1] + (jointOffsetLat * triangleWave);
-        currentM_Lng = targetM[0] + (jointOffsetLng * triangleWave);
-        currentM_Lat = targetM[1] + (jointOffsetLat * triangleWave);
-    }
-
-    if (markerInstances["leftNode"]) markerInstances["leftNode"].setLngLat([currentG_Lng, currentG_Lat]);
-    if (markerInstances["rightNode"]) markerInstances["rightNode"].setLngLat([currentM_Lng, currentM_Lat]);
+    if (markerInstances["leftNode"])  markerInstances["leftNode"].setLngLat(g);
+    if (markerInstances["rightNode"]) markerInstances["rightNode"].setLngLat(m);
+    // The participant's own marker (mainNode) never moves.
 
     if (elapsed < TOTAL_ANIMATION_DURATION) {
         requestAnimationFrame(animateNodes);
     } else {
-        setTimeout(() => {
-            sendCompletionSignal("normal");
-        }, FINAL_HOLD_DURATION);
+        setTimeout(() => sendCompletionSignal("normal"), FINAL_HOLD_DURATION);
     }
 }
 
-// ============================================================================
-// QUALTRICS HANDSHAKE (auto-advance + receipt-acknowledgment logging)
-// ============================================================================
+/* ==========================================================================
+ * QUALTRICS HANDSHAKE
+ * The payload carries technical information only. The participant's nickname
+ * is NEVER transmitted -- it exists only in the browser for the session,
+ * consistent with the instruction that only the participant sees the full name.
+ * ========================================================================== */
 const SESSION_ID = "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
 let qualtricsAckReceived = false;
 let hasSentCompletion = false;
 let handshakeIntervalId = null;
+let animationStartWallClock = null;
+
+function buildPayload(reason) {
+    return {
+        type: "MAP_ANIMATION_COMPLETE",
+        // Clearly-labelled condition identifier for the Qualtrics-side
+        // listener to write into Embedded Data. `condition` is the short
+        // code ("IM" | "SJ" | "SJC") that should be stored as the variable
+        // value; `conditionLabel` is included alongside it purely so the
+        // saved data is human-readable/auditable without a codebook lookup.
+        condition: CONDITION,                     // "IM" | "SJ" | "SJC"
+        conditionLabel: CONDITION_LABEL,
+        sessionId: SESSION_ID,
+        status: (reason === "normal") ? "complete" : "incomplete",
+        reason: reason,                           // normal | timeout | map-load-failed | manual-fallback
+        elapsedMs: animationStartWallClock ? (Date.now() - animationStartWallClock) : null,
+        timestamp: Date.now()
+    };
+}
 
 function sendCompletionSignal(reason) {
     if (hasSentCompletion) return;
     hasSentCompletion = true;
-
-    const payload = {
-        type: "MAP_ANIMATION_COMPLETE",
-        sessionId: SESSION_ID,
-        reason: reason,          // "normal" | "timeout" | "map-load-failed" | "manual-fallback"
-        nickname: userNickname,
-        timestamp: Date.now()
-    };
+    const payload = buildPayload(reason);
 
     let attempts = 0;
-    const MAX_ATTEMPTS = 15;
+    const MAX_ATTEMPTS = 15;   // ~6 s of retries at 400 ms
     handshakeIntervalId = setInterval(() => {
         attempts++;
         try {
@@ -226,18 +408,12 @@ function sendCompletionSignal(reason) {
         if (qualtricsAckReceived || attempts >= MAX_ATTEMPTS) {
             clearInterval(handshakeIntervalId);
             if (!qualtricsAckReceived) {
-                console.warn("No acknowledgment (ack) received from Qualtrics. Showing manual continue button.");
+                console.warn("No acknowledgment from Qualtrics; showing manual continue button.");
                 showManualContinueFallback();
             }
         }
     }, 400);
 }
-
-window.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "MAP_ANIMATION_ACK" && event.data.sessionId === SESSION_ID) {
-        qualtricsAckReceived = true;
-    }
-});
 
 function showManualContinueFallback() {
     if (document.getElementById("manual-continue-fallback")) return;
@@ -254,9 +430,7 @@ function showManualContinueFallback() {
     btn.style.cssText = "padding:8px 20px;border:none;border-radius:6px;background:#2b6cb0;color:#fff;font-size:15px;cursor:pointer;";
     btn.addEventListener("click", () => {
         try {
-            if (window.parent) {
-                window.parent.postMessage({ type: "MAP_ANIMATION_COMPLETE", sessionId: SESSION_ID, reason: "manual-fallback", timestamp: Date.now() }, "*");
-            }
+            if (window.parent) window.parent.postMessage(buildPayload("manual-fallback"), "*");
         } catch (e) { /* ignore */ }
         wrap.remove();
     });
@@ -264,147 +438,402 @@ function showManualContinueFallback() {
     document.body.appendChild(wrap);
 }
 
-// ============================================================================
-// MAXIMUM TIMEOUT (the participant should never remain stuck)
-// ============================================================================
-const MAX_EXPERIMENT_TIMEOUT_MS = 90 * 1000;
-setTimeout(() => {
-    if (!hasSentCompletion) {
-        console.warn("Maximum duration exceeded; auto-advancing the participant.");
-        sendCompletionSignal("timeout");
-    }
-}, MAX_EXPERIMENT_TIMEOUT_MS);
+/* ==========================================================================
+ * TIMEOUTS
+ * Two independent caps. The global cap is generous because nickname entry is
+ * self-paced; the animation cap is tight because it starts only once the map
+ * sequence begins.
+ * ========================================================================== */
+const GLOBAL_TIMEOUT_MS = 240 * 1000;
+const ANIMATION_TIMEOUT_MS = TOTAL_ANIMATION_DURATION + FINAL_HOLD_DURATION + 15000; // 48 s
 
-// ============================
-// EXPERIMENT FLOW ENGINE
-// ============================
-const flowScreen = document.getElementById("experiment-flow-screen");
-const stepConnecting = document.getElementById("step-connecting");
-const stepWaiting = document.getElementById("step-waiting");
-const stepJoined = document.getElementById("step-joined");
-const stepNickname = document.getElementById("step-nickname");
-const nicknameInput = document.getElementById("nickname-input");
-const submitBtn = document.getElementById("submit-btn");
+/* ==========================================================================
+ * ONBOARDING FLOW
+ * ========================================================================== */
+function bootstrap() {
+    window.addEventListener("message", (event) => {
+        if (event.data && event.data.type === "MAP_ANIMATION_ACK" && event.data.sessionId === SESSION_ID) {
+            qualtricsAckReceived = true;
+        }
+    });
 
-function startExperimentFlow() {
     setTimeout(() => {
-        if (stepConnecting) stepConnecting.classList.add("hidden");
-        if (stepWaiting) stepWaiting.classList.remove("hidden");
+        if (!hasSentCompletion) {
+            console.warn("Global maximum duration exceeded; auto-advancing.");
+            sendCompletionSignal("timeout");
+        }
+    }, GLOBAL_TIMEOUT_MS);
+
+    const flowScreen    = document.getElementById("experiment-flow-screen");
+    const stepConnecting = document.getElementById("step-connecting");
+    const stepWaiting    = document.getElementById("step-waiting");
+    const stepJoined     = document.getElementById("step-joined");
+    const stepNickname   = document.getElementById("step-nickname");
+    const nicknameInput  = document.getElementById("nickname-input");
+    const submitBtn      = document.getElementById("submit-btn");
+
+    function startExperimentFlow() {
         setTimeout(() => {
-            if (stepWaiting) stepWaiting.classList.add("hidden");
-            if (stepJoined) stepJoined.classList.remove("hidden");
+            if (stepConnecting) stepConnecting.classList.add("hidden");
+            if (stepWaiting) stepWaiting.classList.remove("hidden");
             setTimeout(() => {
-                if (stepJoined) stepJoined.classList.add("hidden");
-                if (stepNickname) stepNickname.classList.remove("hidden");
-                if (nicknameInput) nicknameInput.focus();
-            }, 3000);
-        }, 5000);
-    }, 3000);
-}
-
-function handleLoginSubmit() {
-    const val = nicknameInput ? nicknameInput.value.trim() : "Katılımcı";
-    if (val === "") { alert("Lütfen geçerli bir takma ad girin."); return; }
-    userNickname = val;
-    if (flowScreen) {
-        flowScreen.style.opacity = "0";
-        flowScreen.style.transform = "scale(0.95)";
+                if (stepWaiting) stepWaiting.classList.add("hidden");
+                if (stepJoined) stepJoined.classList.remove("hidden");
+                setTimeout(() => {
+                    if (stepJoined) stepJoined.classList.add("hidden");
+                    if (stepNickname) stepNickname.classList.remove("hidden");
+                    if (nicknameInput) nicknameInput.focus();
+                }, 3000);
+            }, 5000);
+        }, 3000);
     }
-    setTimeout(() => {
-        if (flowScreen) flowScreen.style.display = "none";
-        initMarkers();
+
+    function beginAnimation() {
         animationStarted = true;
-        requestAnimationFrame(animateNodes);
-    }, 500);
-}
-
-if (submitBtn) submitBtn.addEventListener("click", handleLoginSubmit);
-if (nicknameInput) {
-    nicknameInput.setAttribute("aria-label", "Takma adınızı girin");
-    nicknameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleLoginSubmit(); });
-}
-if (submitBtn) {
-    submitBtn.setAttribute("aria-label", "Takma adı gönder ve devam et");
-}
-
-// ============================================================================
-// CLEAR FALLBACK IF THE MAP FAILS TO LOAD
-// ============================================================================
-let mapHasLoaded = false;
-let mapLoadFallbackTriggered = false;
-
-function showMapLoadFallback() {
-    if (mapLoadFallbackTriggered) return;
-    mapLoadFallbackTriggered = true;
-
-    const mapContainer = document.getElementById("map");
-    if (mapContainer) mapContainer.style.visibility = "hidden";
-
-    const fallback = document.createElement("div");
-    fallback.id = "map-load-fallback";
-    fallback.setAttribute("role", "alert");
-    fallback.setAttribute("aria-live", "assertive");
-    fallback.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;" +
-        "display:flex;align-items:center;justify-content:center;background:#f7f7f7;" +
-        "font-family:sans-serif;text-align:center;padding:24px;box-sizing:border-box;z-index:5000;";
-    fallback.innerHTML =
-        '<div style="max-width:420px;">' +
-        '<p style="font-size:17px;color:#333;margin-bottom:8px;">Harita şu anda yüklenemedi.</p>' +
-        '<p style="font-size:14px;color:#666;">Bağlantınız kontrol ediliyor, lütfen bekleyiniz. Bu ekran otomatik olarak ilerleyecektir.</p>' +
-        "</div>";
-    document.body.appendChild(fallback);
-
-    if (!animationStarted) {
-        animationStarted = true;
+        animationStartWallClock = Date.now();
         setTimeout(() => {
-            sendCompletionSignal("map-load-failed");
-        }, TOTAL_ANIMATION_DURATION + FINAL_HOLD_DURATION);
+            if (!hasSentCompletion) {
+                console.warn("Animation did not complete in time; auto-advancing.");
+                sendCompletionSignal("timeout");
+            }
+        }, ANIMATION_TIMEOUT_MS);
+        requestAnimationFrame(animateNodes);
+    }
+
+    function handleLoginSubmit() {
+        const val = nicknameInput ? nicknameInput.value.trim() : "Katılımcı";
+        if (val === "") { alert("Lütfen geçerli bir takma ad girin."); return; }
+        userNickname = val;
+        if (flowScreen) {
+            flowScreen.style.opacity = "0";
+            flowScreen.style.transform = "scale(0.95)";
+        }
+        setTimeout(() => {
+            if (flowScreen) flowScreen.style.display = "none";
+            initMarkers();
+            beginAnimation();
+        }, 500);
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener("click", handleLoginSubmit);
+        submitBtn.setAttribute("aria-label", "Takma adı gönder ve devam et");
+    }
+    if (nicknameInput) {
+        nicknameInput.setAttribute("aria-label", "Takma adınızı girin");
+        nicknameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleLoginSubmit(); });
+    }
+
+    /* ------------------------------------------------------------------
+     * MAP LOAD FALLBACK
+     * ------------------------------------------------------------------ */
+    let mapHasLoaded = false;
+    let mapLoadFallbackTriggered = false;
+
+    // ?debug=1 on the URL shows the underlying technical error instead of the
+    // generic participant-facing message. Participants never see this.
+    const DEBUG = (typeof location !== "undefined") && /[?&]debug=1/.test(location.search);
+
+    function showMapLoadFallback(detail) {
+        if (mapLoadFallbackTriggered) return;
+        mapLoadFallbackTriggered = true;
+        if (DEBUG) console.error("Map load failure detail:", detail);
+
+        const mapContainer = document.getElementById("map");
+        if (mapContainer) mapContainer.style.visibility = "hidden";
+
+        const fallback = document.createElement("div");
+        fallback.id = "map-load-fallback";
+        fallback.setAttribute("role", "alert");
+        fallback.setAttribute("aria-live", "assertive");
+        fallback.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;" +
+            "display:flex;align-items:center;justify-content:center;background:#f7f7f7;" +
+            "font-family:sans-serif;text-align:center;padding:24px;box-sizing:border-box;z-index:5000;";
+        fallback.innerHTML =
+            '<div style="max-width:420px;">' +
+            '<p style="font-size:17px;color:#333;margin-bottom:8px;">Harita şu anda yüklenemedi.</p>' +
+            '<p style="font-size:14px;color:#666;">Bağlantınız kontrol ediliyor, lütfen bekleyiniz. Bu ekran otomatik olarak ilerleyecektir.</p>' +
+            (DEBUG ? '<pre style="margin-top:16px;padding:10px;background:#fff;border:1px solid #d00;' +
+                     'color:#a00;font-size:12px;text-align:left;white-space:pre-wrap;">' +
+                     String(detail || "no detail captured") + "</pre>" : "") +
+            "</div>";
+        document.body.appendChild(fallback);
+
+        if (!animationStarted) {
+            animationStarted = true;
+            animationStartWallClock = Date.now();
+            setTimeout(() => sendCompletionSignal("map-load-failed"),
+                       TOTAL_ANIMATION_DURATION + FINAL_HOLD_DURATION);
+        }
+    }
+
+    // Basemap layers to suppress, by their vector-tile source-layer name.
+    const HIDDEN_SOURCE_LAYERS = [
+        "poi", "housenumber", "mountain_peak", "aerodrome_label", "aeroway"
+    ];
+
+    // ...but never hide green-space naming. The participant needs to be able
+    // to tell the agents are in a named place rather than on blank ground.
+    const KEEP_VISIBLE = /park|garden|playground|pitch|forest|wood|water_name|nature|recreation/;
+
+    function declutterBasemap() {
+        let hidden = 0, kept = 0;
+        try {
+            const layers = (map.getStyle() && map.getStyle().layers) || [];
+            layers.forEach(layer => {
+                const id = String(layer.id || "").toLowerCase();
+                const srcLayer = String(layer["source-layer"] || "").toLowerCase();
+                const isExtrusion = layer.type === "fill-extrusion";
+
+                if (KEEP_VISIBLE.test(id) || srcLayer === "park") {
+                    if (!isExtrusion) { kept++; return; }
+                }
+                if (isExtrusion || HIDDEN_SOURCE_LAYERS.indexOf(srcLayer) !== -1) {
+                    try { map.setLayoutProperty(layer.id, "visibility", "none"); hidden++; }
+                    catch (e) { /* layer may not accept layout changes */ }
+                }
+            });
+        } catch (e) {
+            console.warn("Could not declutter basemap:", e);
+        }
+        if (DEBUG) console.log("Declutter: " + hidden + " layers hidden, " + kept + " green-space layers kept.");
+    }
+
+    /* ------------------------------------------------------------------
+     * PARK / PLACE NAMING
+     * If the style has no label layer of its own for the relevant source, add
+     * one so the area is identifiable by name. Font is copied from an
+     * existing symbol layer rather than hard-coded, because a font name
+     * outside the style's glyph set renders nothing at all.
+     * ------------------------------------------------------------------ */
+    function ensureParkLabels() {
+        try {
+            const style = map.getStyle();
+            const layers = style.layers || [];
+
+            const alreadyLabelled = layers.some(l =>
+                l.type === "symbol" &&
+                (String(l["source-layer"] || "").toLowerCase() === "park" ||
+                 /park/.test(String(l.id || "").toLowerCase())));
+            if (alreadyLabelled) {
+                if (DEBUG) console.log("Style already labels parks; nothing added.");
+                return;
+            }
+
+            const vectorSource = Object.keys(style.sources || {}).find(
+                k => style.sources[k] && style.sources[k].type === "vector");
+            if (!vectorSource) return;
+
+            let font = null;
+            for (const l of layers) {
+                if (l.type === "symbol" && l.layout && l.layout["text-font"]) { font = l.layout["text-font"]; break; }
+            }
+
+            map.addLayer({
+                id: "study-park-label",
+                type: "symbol",
+                source: vectorSource,
+                "source-layer": "park",
+                filter: ["has", "name"],
+                layout: Object.assign({
+                    "text-field": ["get", "name"],
+                    "text-size": 14,
+                    "text-max-width": 8,
+                    "symbol-placement": "point"
+                }, font ? { "text-font": font } : {}),
+                paint: {
+                    "text-color": "#3d6b47",
+                    "text-halo-color": "#ffffff",
+                    "text-halo-width": 1.6
+                }
+            });
+            if (DEBUG) console.log("Added park label layer from source '" + vectorSource + "'.");
+        } catch (e) {
+            console.warn("Could not add park labels:", e);
+        }
+    }
+
+    /* ------------------------------------------------------------------
+     * BASEMAP PALETTE
+     * Recolours the vector style to the soft, warm scheme used by consumer
+     * location apps: cream land, muted green parks, pale blue water, white
+     * roads with a light casing. Layers are matched by their vector-tile
+     * source-layer and id rather than hard-coded style ids, so this survives
+     * upstream changes to the Liberty style.
+     * ------------------------------------------------------------------ */
+    const PALETTE = {
+        land:      "#f2efe6",
+        green:     "#bfe3ab",   // parks and named green space
+        greenSoft: "#d6ead0",   // generic landcover, kept lighter so parks stand out
+        greenDeep: "#a8d493",
+        water:     "#a9d8f0",
+        road:      "#ffffff",
+        roadCase:  "#e4dfd3",
+        building:  "#e8e3d8",
+        text:      "#5a6b5e",
+        textHalo:  "#ffffff"
+    };
+
+    function paint(id, prop, value) {
+        try { map.setPaintProperty(id, prop, value); } catch (e) { /* not applicable */ }
+    }
+
+    function applyFindMyPalette() {
+        try {
+            const layers = (map.getStyle() && map.getStyle().layers) || [];
+            layers.forEach(layer => {
+                const id = String(layer.id || "").toLowerCase();
+                const sl = String(layer["source-layer"] || "").toLowerCase();
+                const t  = layer.type;
+                const isGreen = sl === "park" ||
+                    /park|grass|wood|forest|garden|pitch|golf|cemetery|scrub|meadow|orchard/.test(id);
+                const isWater = sl === "water" || sl === "waterway" ||
+                    /water|ocean|river|lake|sea|bay/.test(id);
+
+                if (t === "background") { paint(id, "background-color", PALETTE.land); return; }
+                if (isWater) {
+                    if (t === "fill") paint(id, "fill-color", PALETTE.water);
+                    if (t === "line") paint(id, "line-color", PALETTE.water);
+                    return;
+                }
+                if (isGreen) {
+                    if (t === "fill") { paint(id, "fill-color", PALETTE.green); paint(id, "fill-opacity", 1); }
+                    if (t === "line") paint(id, "line-color", PALETTE.greenDeep);
+                    return;
+                }
+                if (sl === "landcover") {
+                    if (t === "fill") { paint(id, "fill-color", PALETTE.greenSoft); paint(id, "fill-opacity", 0.9); }
+                    return;
+                }
+                if (sl === "landuse") {
+                    if (t === "fill") paint(id, "fill-color", PALETTE.land);
+                    return;
+                }
+                if (sl === "building") {
+                    if (t === "fill") { paint(id, "fill-color", PALETTE.building); paint(id, "fill-opacity", 0.85); }
+                    return;
+                }
+                if (sl === "transportation") {
+                    if (t === "line") {
+                        const casing = /casing|outline|bridge|tunnel/.test(id);
+                        paint(id, "line-color", casing ? PALETTE.roadCase : PALETTE.road);
+                    }
+                    return;
+                }
+                if (t === "symbol") {
+                    paint(id, "text-color", PALETTE.text);
+                    paint(id, "text-halo-color", PALETTE.textHalo);
+                    paint(id, "text-halo-width", 1.4);
+                }
+            });
+        } catch (e) {
+            console.warn("Could not apply palette:", e);
+        }
+    }
+
+    // Debug-only overlay reporting the true on-screen scale, so geometry can
+    // be checked against the design figures without guessing from screenshots.
+    function showScaleReadout() {
+        try {
+            const pG = map.project(START_G), pM = map.project(START_M);
+            const pxGM = Math.hypot(pG.x - pM.x, pG.y - pM.y);
+            const canvas = map.getCanvas();
+            const mPerPx = 156543.03392 * Math.cos(MAP_CENTER[1] * Math.PI / 180) /
+                           Math.pow(2, MAP_ZOOM);
+            const box = document.createElement("div");
+            box.style.cssText = "position:fixed;top:56px;left:8px;z-index:6000;background:rgba(0,0,0,0.82);" +
+                "color:#fff;font:11px ui-monospace,Menlo,Consolas,monospace;padding:8px 10px;" +
+                "border-radius:6px;white-space:pre;line-height:1.5;";
+            box.textContent =
+                "condition   " + CONDITION + "\n" +
+                "zoom        " + map.getZoom().toFixed(2) + "\n" +
+                "m per px    " + mPerPx.toFixed(3) + "\n" +
+                "G-M px      " + pxGM.toFixed(1) + "\n" +
+                "map canvas  " + canvas.clientWidth + " x " + canvas.clientHeight + " css px\n" +
+                "devicePixelRatio " + (window.devicePixelRatio || 1);
+            document.body.appendChild(box);
+        } catch (e) { console.warn("scale readout failed", e); }
+    }
+
+    startExperimentFlow();
+
+    const MAP_LOAD_TIMEOUT_MS = 8000;
+    let mapLoadTimeoutId = null;
+
+    try {
+        if (typeof maplibregl !== "undefined") {
+            map = new maplibregl.Map({
+                container: "map",
+                style: "https://tiles.openfreemap.org/styles/liberty",
+                center: MAP_CENTER,
+                zoom: MAP_ZOOM,
+                minZoom: MAP_ZOOM,
+                maxZoom: MAP_ZOOM,
+                dragPan: false, doubleClickZoom: false, boxZoom: false,
+                keyboard: false, touchZoomRotate: false,
+                pixelRatio: window.devicePixelRatio || 2
+            });
+
+            mapLoadTimeoutId = setTimeout(() => {
+                if (!mapHasLoaded) {
+                    console.warn("Map did not load within the allotted time.");
+                    showMapLoadFallback("Map 'load' event did not fire within " +
+                        MAP_LOAD_TIMEOUT_MS + " ms. Most common cause: the page was " +
+                        "opened from disk (file://), which blocks MapLibre's web workers. " +
+                        "Serve the folder over http:// instead. Current protocol: " +
+                        (typeof location !== "undefined" ? location.protocol : "unknown"));
+                }
+            }, MAP_LOAD_TIMEOUT_MS);
+
+            map.on("load", () => {
+                mapHasLoaded = true;
+                if (mapLoadTimeoutId) clearTimeout(mapLoadTimeoutId);
+
+                // At zoom 18 the OSM basemap renders every shop, bank and
+                // transit entrance. Those icons are the same size and colour
+                // family as the agent markers, so decluttering keeps streets,
+                // parks, water and place names -- what a real location app shows.
+                declutterBasemap();
+                applyFindMyPalette();
+                ensureParkLabels();
+
+                // No CSS filter: a filter desaturates everything uniformly.
+                // The palette above recolours the actual style layers instead.
+                map.getCanvas().style.filter = "none";
+
+                if (DEBUG) showScaleReadout();
+            });
+
+            map.on("error", (e) => {
+                console.error("Map error event:", e);
+                if (!mapHasLoaded) showMapLoadFallback("MapLibre error event: " +
+                    ((e && e.error && e.error.message) || (e && e.message) || JSON.stringify(e)));
+            });
+        } else {
+            console.warn("MapLibre CDN library failed to load.");
+            showMapLoadFallback("maplibregl is undefined -- the CDN script tag in " +
+                "index.html did not load. Check the network tab for " +
+                "cdn.jsdelivr.net/npm/maplibre-gl@3.6.2");
+        }
+    } catch (error) {
+        console.error("Map initialization failed:", error);
+        showMapLoadFallback("Exception during map construction: " +
+            (error && error.message ? error.message : String(error)));
     }
 }
 
-const MAP_LOAD_TIMEOUT_MS = 8000;
-let mapLoadTimeoutId = null;
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+    bootstrap();
+}
 
-// ============================
-// FAIL-SAFE INITIALIZATION BLOCK
-// ============================
-startExperimentFlow();
-
-try {
-    if (typeof maplibregl !== 'undefined') {
-        map = new maplibregl.Map({
-            container: 'map',
-            style: 'https://tiles.openfreemap.org/styles/liberty',
-            center: [32.8540, 39.9195], 
-            zoom: 13.0,                
-            minZoom: 13.0,             
-            maxZoom: 13.0,             
-            dragPan: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoomRotate: false,    
-            pixelRatio: window.devicePixelRatio || 2 
-        });
-
-        mapLoadTimeoutId = setTimeout(() => {
-            if (!mapHasLoaded) {
-                console.warn("Map did not load within the allotted time (timeout).");
-                showMapLoadFallback();
-            }
-        }, MAP_LOAD_TIMEOUT_MS);
-
-        map.on('load', () => {
-            mapHasLoaded = true;
-            if (mapLoadTimeoutId) clearTimeout(mapLoadTimeoutId);
-            map.getCanvas().style.filter = 'grayscale(0.6) contrast(1.1) brightness(0.95) hue-rotate(25deg)';
-        });
-
-        map.on('error', (e) => {
-            console.error("Map error event:", e);
-            if (!mapHasLoaded) showMapLoadFallback();
-        });
-    } else {
-        console.warn("MapLibre CDN library failed to load.");
-        showMapLoadFallback();
-    }
-} catch (error) {
-    console.error("Map initialization failed:", error);
-    showMapLoadFallback();
+/* Exported for offline auditing (ignored by the browser). */
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+        CONDITION, CONDITION_LABEL, SCHEDULE_G, SCHEDULE_M,
+        START_G, START_M, START_U, MAP_CENTER, MAP_ZOOM, WALK_SPEED_MPS,
+        SCENE_ROTATION_DEG,
+        T_STABLE, T_BLOCK1, T_BLOCK2, T_BLOCK3, T_BLOCK4, TOTAL_ANIMATION_DURATION,
+        agentPosition, truePosition, offsetMeters,
+        GPS_UPDATE_MS, GPS_TWEEN_MS
+    };
 }
