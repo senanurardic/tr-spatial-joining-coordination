@@ -44,17 +44,15 @@ const CONDITION_LABEL = "Spatial Joining and Coordination";
 // two points on opposite sides of the same hub).
 // Each agent walks 15.0 m (10 s at 1.5 m/s) with two independent 1 s
 // pauses, for a 12 s block.
-// G's pauses fall at local t = 4-5 s and 9-10 s.
+// G's pauses fall at local t = 1-2 s and 7-8 s.
 const SCHEDULE_G_BLOCK1 = [
-    { d: 4, b: 75 }, { d: 1, b: null }, { d: 4, b: 75 },
-    { d: 1, b: null }, { d: 2, b: 75 }
+    { d: 1, b: 75 }, { d: 1, b: null }, { d: 5, b: 75 },
+    { d: 1, b: null }, { d: 4, b: 75 }
 ];
-// M's pauses fall at local t = 3-4 s and 8-9 s -- never the same second as
-// G's, so the pausing itself still reads as independent even though the
-// overall approach is synchronous/linear.
+// M's pauses fall at local t = 4-5 s and 10-11 s.
 const SCHEDULE_M_BLOCK1 = [
-    { d: 3, b: 255 }, { d: 1, b: null }, { d: 4, b: 255 },
-    { d: 1, b: null }, { d: 3, b: 255 }
+    { d: 4, b: 255 }, { d: 1, b: null }, { d: 5, b: 255 },
+    { d: 1, b: null }, { d: 1, b: 255 }
 ];
 
 // -- Block 2 (both agents fully stationary for 2 s) ------------------------
@@ -62,15 +60,15 @@ const SCHEDULE_BLOCK2_PAUSE = [{ d: 2, b: null }];
 
 // -- Block 3 (local t = 0-12 s within the block) ---------------------------
 // Both G and M move synchronously and coordinated.
-// G's pauses fall at local t = 1-2 s and 7-8 s.
+// G's pauses fall at local t = 4-5 s and 10-11 s.
 const SCHEDULE_G_BLOCK3 = [
-    { d: 1, b: 345 }, { d: 1, b: null }, { d: 4, b: 345 },
-    { d: 1, b: 165 }, { d: 1, b: null }, { d: 4, b: 165 }
-];
-// M's pauses fall at local t = 4-5 s and 10-11 s.
-const SCHEDULE_M_BLOCK3 = [
     { d: 4, b: 345 }, { d: 1, b: null }, { d: 1, b: 345 },
     { d: 4, b: 165 }, { d: 1, b: null }, { d: 1, b: 165 }
+];
+// M's pauses fall at local t = 1-2 s and 7-8 s.
+const SCHEDULE_M_BLOCK3 = [
+    { d: 1, b: 345 }, { d: 1, b: null }, { d: 4, b: 345 },
+    { d: 1, b: 165 }, { d: 1, b: null }, { d: 4, b: 165 }
 ];
 
 const SCHEDULE_G = SCHEDULE_G_BLOCK1.concat(SCHEDULE_BLOCK2_PAUSE, SCHEDULE_G_BLOCK3);
