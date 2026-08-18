@@ -1,12 +1,6 @@
 /* ============================================================================
  * LOCATION-SHARING SOCIAL DISCONNECTION PARADIGM
- * Condition: Spatial Joining and Coordination (SJC)
- * Timing source of truth: "CRIP - Experimental Flow - Exclusion Map Study"
- *
- * Everything below the CONDITION BLOCK is IDENTICAL across the three repos
- * (byte-for-byte identical to IM's and SJ's copies).
- * To change a condition, edit ONLY the CONDITION BLOCK.
- *
+ * Condition: Spatial Joining and Coordination (SJC)  
  * Flow (t = 0 is the moment the participant submits their nickname):
  *   Block 0  0-6 s    Starting position, stable (idle GPS jitter only)
  *   Block 1  6-18 s   Synchronous approach: both agents walk in a straight
@@ -18,9 +12,8 @@
  *   Block 4  32-35 s  Both agents remain stationary before hand-back to survey
  *   Total sequence: 35 s.
  *
- * Design constraints (identical in every condition, verified numerically):
- *   - Walking speed 1.5 m/s (5.4 km/h), pedestrian pace, identical in every
- *     condition and every block.
+ * Design constraints (identical in every condition):
+ *   - Walking speed 1.5 m/s (5.4 km/h), pedestrian pace.
  *   - Each agent pauses for exactly 1 s, twice, during Block 1 and again
  *     twice during Block 3, at independent (non-coinciding) times.
  *   - Each agent walks for exactly 10 s of the 12 s in Block 1 (15.0 m) and
@@ -29,10 +22,10 @@
  *   - G-M start separation: 40.0 m, identical in every condition (see the
  *     note on the HUB/START_G/START_M geometry below for why this specific
  *     value was chosen -- it is not arbitrary).
- *   - Icons never overlap and never leave the zoom-18 viewport.
+ *   - Icons never totally overlap and never leave the zoom-18 viewport.
  *   - MANIPULATION: Block 1 is a synchronous, linear, direct approach.
  *     Block 3 introduces a synchronous and coordinated movement where both 
- *     agents travel identically side-by-side, maintaining their meeting 
+ *     agents travel side-by-side, maintaining their meeting 
  *     distance, heading away and then returning to the meeting point.
  * ========================================================================== */
 
@@ -50,10 +43,7 @@ const CONDITION_LABEL = "Spatial Joining and Coordination";
 // is 255 deg (exactly opposite, as required for a straight line between
 // two points on opposite sides of the same hub).
 // Each agent walks 15.0 m (10 s at 1.5 m/s) with two independent 1 s
-// pauses, for a 12 s block. With a 40.0 m start separation, 15.0 m + 15.0 m
-// of closure leaves them 10.0 m apart at the end of Block 1 -- a clear,
-// unambiguous overlap of the 32 px markers at zoom 18 (empirically
-// re-verified below including GPS jitter, not just the deterministic path).
+// pauses, for a 12 s block.
 // G's pauses fall at local t = 4-5 s and 9-10 s.
 const SCHEDULE_G_BLOCK1 = [
     { d: 4, b: 75 }, { d: 1, b: null }, { d: 4, b: 75 },
@@ -71,10 +61,7 @@ const SCHEDULE_M_BLOCK1 = [
 const SCHEDULE_BLOCK2_PAUSE = [{ d: 2, b: null }];
 
 // -- Block 3 (local t = 0-12 s within the block) ---------------------------
-// Both G and M move synchronously and coordinated. They travel perpendicular 
-// to their separation axis (bearing 345 for 6s, then 165 for 6s) to maintain 
-// their exact 10m meeting distance side-by-side. 
-// Each walks 7.5 m out and 7.5 m back (10 s total walking, 2 s pausing each).
+// Both G and M move synchronously and coordinated.
 // G's pauses fall at local t = 1-2 s and 7-8 s.
 const SCHEDULE_G_BLOCK3 = [
     { d: 1, b: 345 }, { d: 1, b: null }, { d: 4, b: 345 },
@@ -130,15 +117,8 @@ function offsetMeters(origin, bearingDeg, meters) {
 
 // Start positions are derived from a single hub point and a single offset, so
 // the starting geometry is identical across all three conditions by
-// construction. G and M start 40.0 m apart -- chosen so that SJ/SJC's
-// Block 1 (each agent contributes 15.0 m of the fixed 10 s-of-walking
-// budget, closing 30.0 m combined) ends with them 10.0 m apart: a clear,
-// unambiguous ~32% overlap of the 32 px markers at zoom 18, not just a
-// touch at the edges. IM does not require a meeting, but the geometry must
-// be identical across all three conditions per the flow spec, so IM uses
-// this same 40.0 m separation. The participant sits on the perpendicular
-// bisector of the G-M axis, roughly equidistant from each, so the geometry
-// never tilts toward one agent.
+// construction. IM does not require a meeting, but the geometry must
+// be identical across all three conditions per the flow spec.
 const HUB = offsetMeters(MAP_CENTER, rot(0), 12);
 const START_G = offsetMeters(HUB, rot(255), 20.0);
 const START_M = offsetMeters(HUB, rot(75), 20.0);
