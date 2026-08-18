@@ -211,12 +211,15 @@ const JITTER_RAMP_MS = 2000; // amplitude eases between the two, never steps --
                               // a step would teleport the marker and register
                               // as a large instantaneous speed spike.
 function jitterAmplitude(elapsedMs) {
-    const moveStart = T_STABLE;
-    const a = moveStart - JITTER_RAMP_MS / 2, b = moveStart + JITTER_RAMP_MS / 2;
-    if (elapsedMs <= a) return JITTER_IDLE_M;
-    if (elapsedMs >= b) return JITTER_MOVE_M;
-    const ease = 0.5 - 0.5 * Math.cos(Math.PI * (elapsedMs - a) / JITTER_RAMP_MS);
-    return JITTER_IDLE_M + (JITTER_MOVE_M - JITTER_IDLE_M) * ease;
+    const t1 = T_STABLE + T_BLOCK1;
+    const t2 = t1 + T_BLOCK2;
+    const t3 = t2 + T_BLOCK3;
+
+    if (elapsedMs <= T_STABLE) return JITTER_IDLE_M;
+    if (elapsedMs >= t1 && elapsedMs <= t2) return JITTER_IDLE_M;
+    if (elapsedMs >= t3) return JITTER_IDLE_M;
+
+    return JITTER_MOVE_M;
 }
 
 const WAYPOINTS_G = buildWaypoints(START_G, SCHEDULE_G);
