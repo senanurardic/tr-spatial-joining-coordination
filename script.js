@@ -11,12 +11,12 @@
  *                      away from the meeting point for 6s, then return for 6s.
  *   Block 4  44-47 s  Both agents remain stationary before hand-back to survey
  *   Total sequence: 47 s.
-
- * ========================================================================== */
-
 /* ==========================================================================
  * CONDITION BLOCK -- the only part that differs between the three repos
  * ========================================================================== */
+const CONDITION = "SJC";
+const CONDITION_LABEL = "Spatial Joining and Coordination";
+
 // -- Block 1 (local t = 0-18 s within the block) --------------------------
 // 18 seconds of continuous, synchronous direct approach.
 const SCHEDULE_G_BLOCK1 = [{ d: 18, b: 75 }];
