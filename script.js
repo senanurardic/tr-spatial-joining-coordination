@@ -10,23 +10,8 @@
  *                      move together in identical direction, distance, and speed
  *                      away from the meeting point for 6s, then return for 6s.
  *   Block 4  44-47 s  Both agents remain stationary before hand-back to survey
- *   Total sequence: 44 s.
- *
- * Design constraints (identical in every condition):
- *   - Walking speed 1.5 m/s (5.4 km/h), pedestrian pace.
- *   - Each agent pauses for exactly 1 s, twice, during Block 1 and again
- *     twice during Block 3, at independent (non-coinciding) times.
- *   - Each agent walks for exactly 10 s of the 18 s in Block 1 (15.0 m) and
- *     10 s of the 18 s in Block 3 (15.0 m): 30.0 m total per agent, matched
- *     to IM's total.
- *   - G-M start separation: 40.0 m, identical in every condition (see the
- *     note on the HUB/START_G/START_M geometry below for why this specific
- *     value was chosen -- it is not arbitrary).
- *   - Icons never totally overlap and never leave the zoom-18 viewport.
- *   - MANIPULATION: Block 1 is a synchronous, linear, direct approach.
- *     Block 3 introduces a synchronous and coordinated movement where both 
- *     agents travel side-by-side, maintaining their meeting 
- *     distance, heading away and then returning to the meeting point.
+ *   Total sequence: 47 s.
+
  * ========================================================================== */
 
 /* ==========================================================================
