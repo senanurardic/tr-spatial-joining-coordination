@@ -3,21 +3,21 @@
  * Condition: Spatial Joining and Coordination (SJC)  
  * Flow (t = 0 is the moment the participant submits their nickname):
  *   Block 0  0-6 s    Starting position, stable (idle GPS jitter only)
- *   Block 1  6-18 s   Synchronous approach: both agents walk in a straight
- *                      line toward each other until they meet (12 s)
- *   Block 2  18-20 s  Both agents stop between blocks (2 s)
- *   Block 3  20-32 s  Synchronous and Coordinated movement (12 s). Both agents
+ *   Block 1  6-24 s   Synchronous approach: both agents walk in a straight
+ *                      line toward each other until they meet (18 s)
+ *   Block 2  24-26 s  Both agents stop between blocks (2 s)
+ *   Block 3  26-44 s  Synchronous and Coordinated movement (18 s). Both agents
  *                      move together in identical direction, distance, and speed
  *                      away from the meeting point for 6s, then return for 6s.
- *   Block 4  32-35 s  Both agents remain stationary before hand-back to survey
- *   Total sequence: 35 s.
+ *   Block 4  44-47 s  Both agents remain stationary before hand-back to survey
+ *   Total sequence: 44 s.
  *
  * Design constraints (identical in every condition):
  *   - Walking speed 1.5 m/s (5.4 km/h), pedestrian pace.
  *   - Each agent pauses for exactly 1 s, twice, during Block 1 and again
  *     twice during Block 3, at independent (non-coinciding) times.
- *   - Each agent walks for exactly 10 s of the 12 s in Block 1 (15.0 m) and
- *     10 s of the 12 s in Block 3 (15.0 m): 30.0 m total per agent, matched
+ *   - Each agent walks for exactly 10 s of the 18 s in Block 1 (15.0 m) and
+ *     10 s of the 18 s in Block 3 (15.0 m): 30.0 m total per agent, matched
  *     to IM's total.
  *   - G-M start separation: 40.0 m, identical in every condition (see the
  *     note on the HUB/START_G/START_M geometry below for why this specific
